@@ -31,7 +31,7 @@ from engine import (
 )
 from harvester import harvester, scan_import_folder
 from image_editor import apply_image_edit
-from image_engine import SSD_IMAGES_DIR, generate_image, generate_image_hybrid, get_flux_rom_status, list_ssd_images
+from image_engine import SSD_IMAGES_DIR, generate_image, generate_image_hybrid, get_flux_rom_status, get_image_model_vault, list_ssd_images
 from rom_vault import download_cve_datasets, search_cve_vault
 from sandbox import run_code_in_sandbox, run_safe_terminal_command
 from security_lab import audit_laptop_security, auto_patch_code, scan_code_vulnerabilities
@@ -43,6 +43,7 @@ PORT = 8080
 BOOT_ID = str(time.time())
 TERMINAL_CWD = os.path.expanduser("~")
 LLAMA_UPDATE_STATUS = {"running": False, "message": "llama.cpp updater idle"}
+QUANTUM_MODE = {"enabled": True}
 init_code_vault()
 init_token_matrix()
 
@@ -954,19 +955,617 @@ HTML_UI = r"""<!DOCTYPE html>
     .tok-com { color: #6a9955; font-style: italic; }
     .inline-run-box { padding: 10px 12px; background: #0b1120; border-top: 1px solid rgba(56,189,248,0.25); font-family: monospace; font-size: 0.82rem; color: #e2e8f0; }
     .inline-run-frame { width: 100%; height: 340px; border: 1px solid rgba(56,189,248,0.3); border-radius: 8px; background: #0f172a; }
+
+    /* ==================================================================
+       ARGON v2 — visual layer: texture, depth, chat UX
+       Appended last so it overrides the base rules above.
+       ================================================================== */
+    :root {
+      --bg-main: #0a0e14;
+      --bg-sidebar: #060a10;
+      --bg-surface: #101722;
+      --bg-surface-hover: #17202c;
+      --border: rgba(148, 163, 184, 0.16);
+      --border-subtle: rgba(148, 163, 184, 0.09);
+      --text: #e9eef6;
+      --text-muted: #8ea1b7;
+      --accent: #10b981;
+      --accent-2: #22d3ee;
+      --accent-3: #8b5cf6;
+      --accent-soft: rgba(16, 185, 129, 0.14);
+      --grad-brand: linear-gradient(135deg, #10b981, #22d3ee 55%, #8b5cf6);
+      --grad-user: linear-gradient(135deg, rgba(16,185,129,.95), rgba(13,148,136,.92));
+      --radius-lg: 20px;
+      --radius: 14px;
+      --radius-sm: 10px;
+      --shadow-1: 0 1px 2px rgba(0,0,0,.45), 0 14px 30px -20px rgba(0,0,0,.9);
+      --shadow-glow: 0 0 0 1px rgba(16,185,129,.28), 0 16px 40px -18px rgba(16,185,129,.42);
+      --font-sans: 'Inter', system-ui, -apple-system, 'Segoe UI', Roboto, 'Helvetica Neue', sans-serif;
+      --font-mono: 'JetBrains Mono', ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+    }
+
+    html, body { height: 100%; }
+    body {
+      font-family: var(--font-sans);
+      color: var(--text);
+      letter-spacing: 0.1px;
+      background:
+        radial-gradient(1100px 760px at 8% -12%, rgba(16,185,129,.13), transparent 62%),
+        radial-gradient(900px 620px at 102% -4%, rgba(34,211,238,.10), transparent 58%),
+        radial-gradient(760px 520px at 50% 118%, rgba(139,92,246,.10), transparent 60%),
+        var(--bg-main);
+      background-attachment: fixed;
+      -webkit-font-smoothing: antialiased;
+      text-rendering: optimizeLegibility;
+    }
+    /* fine grain + vignette so flat panels read as surfaces, not voids */
+    body::before {
+      content: "";
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      opacity: .55; mix-blend-mode: soft-light;
+      background-image: url("data:image/svg+xml;utf8,<svg xmlns='http://www.w3.org/2000/svg' width='180' height='180'><filter id='n'><feTurbulence type='fractalNoise' baseFrequency='0.82' numOctaves='3' stitchTiles='stitch'/><feColorMatrix type='saturate' values='0'/></filter><rect width='180' height='180' filter='url(%23n)' opacity='0.38'/></svg>");
+    }
+    body::after {
+      content: "";
+      position: fixed; inset: 0; z-index: 0; pointer-events: none;
+      background: radial-gradient(120% 90% at 50% 0%, transparent 52%, rgba(2,6,12,.55) 100%);
+    }
+    .sidebar, .main { position: relative; z-index: 1; }
+
+    ::selection { background: rgba(16,185,129,.32); color: #f8fffb; }
+    * { scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.32) transparent; }
+    ::-webkit-scrollbar { width: 10px; height: 10px; }
+    ::-webkit-scrollbar-track { background: transparent; }
+    ::-webkit-scrollbar-thumb {
+      background: rgba(148,163,184,.26); border-radius: 99px;
+      border: 3px solid transparent; background-clip: content-box;
+    }
+    ::-webkit-scrollbar-thumb:hover { background: rgba(148,163,184,.45); background-clip: content-box; }
+
+    :focus-visible { outline: 2px solid rgba(34,211,238,.75); outline-offset: 2px; border-radius: 6px; }
+
+    /* ---------------- sidebar ---------------- */
+    .sidebar {
+      width: 272px;
+      background:
+        linear-gradient(180deg, rgba(16,185,129,.05), transparent 22%),
+        linear-gradient(180deg, rgba(6,10,16,.96), rgba(6,10,16,.99));
+      border-right: 1px solid var(--border-subtle);
+      backdrop-filter: blur(18px) saturate(120%);
+    }
+    .sidebar-header { padding: 14px 12px 10px; gap: 8px; align-items: center; }
+    .sidebar-brand {
+      display: flex; align-items: center; gap: 10px; flex: 1; min-width: 0;
+      font-weight: 800; font-size: .95rem; letter-spacing: .3px;
+    }
+    .sidebar-brand .orb {
+      width: 28px; height: 28px; border-radius: 9px; flex: none;
+      background: var(--grad-brand); display: grid; place-items: center;
+      color: #05100c; font-size: .95rem; font-weight: 900;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.14) inset, 0 8px 20px -10px rgba(16,185,129,.8);
+    }
+    .sidebar-brand .brand-text { display: flex; flex-direction: column; line-height: 1.1; min-width: 0; }
+    .sidebar-brand .brand-text small { color: var(--text-muted); font-size: .62rem; font-weight: 600; letter-spacing: .14em; text-transform: uppercase; }
+
+    .btn-new-chat {
+      background: linear-gradient(180deg, rgba(16,185,129,.16), rgba(16,185,129,.06));
+      border: 1px solid rgba(16,185,129,.35);
+      color: #d8ffee; font-weight: 700; border-radius: 12px;
+      padding: 10px 12px; transition: transform .15s ease, box-shadow .2s ease, background .2s ease;
+    }
+    .btn-new-chat:hover {
+      transform: translateY(-1px);
+      box-shadow: 0 10px 26px -16px rgba(16,185,129,.9);
+      background: linear-gradient(180deg, rgba(16,185,129,.24), rgba(16,185,129,.1));
+    }
+    .btn-new-chat:active { transform: translateY(0) scale(.99); }
+
+    .icon-btn {
+      border-radius: 10px; border: 1px solid transparent; color: var(--text-muted);
+      transition: background .18s ease, color .18s ease, border-color .18s ease;
+    }
+    .icon-btn:hover { background: var(--bg-surface); color: var(--text); border-color: var(--border-subtle); }
+
+    .sidebar-search {
+      margin: 2px 12px 8px; display: flex; align-items: center; gap: 8px;
+      padding: 8px 10px; border-radius: 10px;
+      background: rgba(148,163,184,.06); border: 1px solid var(--border-subtle);
+      transition: border-color .18s ease, background .18s ease;
+    }
+    .sidebar-search:focus-within { border-color: rgba(34,211,238,.45); background: rgba(34,211,238,.06); }
+    .sidebar-search span { font-size: .8rem; color: var(--text-muted); }
+    .sidebar-search input {
+      flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+      color: var(--text); font-size: .82rem; font-family: inherit;
+    }
+
+    .sidebar-section-header { padding: 4px 16px 6px; }
+    .sidebar-section-title {
+      font-size: .66rem; letter-spacing: .16em; text-transform: uppercase;
+      color: var(--text-muted); font-weight: 700;
+    }
+    .clear-all-btn { font-size: .68rem; border-radius: 8px; padding: 3px 8px; }
+    .history-list { padding: 0 10px 10px; gap: 2px; }
+    .history-item {
+      border-radius: 10px; padding: 9px 10px; position: relative;
+      transition: background .16s ease, transform .16s ease;
+    }
+    .history-item:hover { background: var(--bg-surface); transform: translateX(1px); }
+    .history-item.active { background: rgba(16,185,129,.1); }
+    .history-item.active::before {
+      content: ""; position: absolute; left: 0; top: 8px; bottom: 8px; width: 2px;
+      border-radius: 2px; background: var(--grad-brand);
+    }
+    .history-item-title { font-size: .82rem; color: #cfdae8; }
+    .history-item.active .history-item-title { color: #eafff7; font-weight: 600; }
+    .history-empty {
+      padding: 10px 14px; font-size: .76rem; color: var(--text-muted);
+      line-height: 1.5;
+    }
+
+    .telemetry-stack { padding: 0 12px 14px; gap: 8px; }
+    .card {
+      background: linear-gradient(180deg, rgba(148,163,184,.07), rgba(148,163,184,.03));
+      border: 1px solid var(--border-subtle); border-radius: var(--radius);
+      padding: 11px 12px; backdrop-filter: blur(6px);
+    }
+    .card-label { font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); }
+    .metric { font-variant-numeric: tabular-nums; font-weight: 700; }
+    .progress-bar { height: 6px; border-radius: 99px; background: rgba(148,163,184,.14); overflow: hidden; }
+    .progress-fill { border-radius: 99px; background: var(--grad-brand); transition: width .5s ease; }
+    .sidebar-foot {
+      padding: 10px 16px; border-top: 1px solid var(--border-subtle);
+      display: flex; align-items: center; gap: 8px;
+      font-size: .7rem; color: var(--text-muted);
+    }
+    .sidebar-foot .dot {
+      width: 7px; height: 7px; border-radius: 99px; background: var(--accent);
+      box-shadow: 0 0 0 3px rgba(16,185,129,.18); flex: none;
+    }
+
+    /* ---------------- top bar ---------------- */
+    .main { background: transparent; }
+    .topbar {
+      position: sticky; top: 0; z-index: 20;
+      padding: 10px 16px; gap: 10px;
+      background: rgba(10,14,20,.72);
+      border-bottom: 1px solid var(--border-subtle);
+      backdrop-filter: blur(18px) saturate(130%);
+    }
+    .model-pill {
+      border-radius: 12px; padding: 6px 12px; gap: 8px;
+      border: 1px solid var(--border-subtle);
+      background: linear-gradient(180deg, rgba(148,163,184,.08), rgba(148,163,184,.03));
+      font-weight: 700; letter-spacing: .2px;
+    }
+    .model-pill:hover { border-color: rgba(16,185,129,.35); background: rgba(16,185,129,.08); }
+    .model-pill span.tag {
+      background: var(--grad-brand); color: #04120c; font-weight: 800;
+      border-radius: 99px; padding: 2px 8px; font-size: .62rem; letter-spacing: .04em;
+    }
+    .top-chip {
+      display: inline-flex; align-items: center; gap: 6px;
+      font-size: .7rem; font-weight: 700; padding: 5px 10px; border-radius: 99px;
+      border: 1px solid rgba(251,191,36,.38); background: rgba(251,191,36,.12); color: #fcd34d;
+    }
+    .topbar-controls select, .lab-container select, .gallery-toolbar select {
+      background: rgba(16,23,34,.9); color: var(--text);
+      border: 1px solid var(--border); border-radius: 10px;
+      padding: 6px 9px; font-size: .76rem; font-family: inherit;
+      transition: border-color .18s ease;
+    }
+    .topbar-controls select:hover, select:hover { border-color: rgba(34,211,238,.4); }
+
+    .tabs { gap: 6px; padding: 4px 0 0; border-top: 1px solid var(--border-subtle); margin-top: 4px; }
+    .tab-btn {
+      border-radius: 10px; padding: 7px 12px; font-size: .78rem; font-weight: 600;
+      color: var(--text-muted); background: transparent; border: 1px solid transparent;
+      transition: color .16s ease, background .16s ease, border-color .16s ease;
+    }
+    .tab-btn:hover { color: var(--text); background: rgba(148,163,184,.08); }
+    .tab-btn.active {
+      color: #d9fff1; background: linear-gradient(.0deg, rgba(16,185,129,.16), rgba(16,185,129,.08));
+      border-color: rgba(16,185,129,.4); box-shadow: 0 8px 20px -18px rgba(16,185,129,.9);
+    }
+
+    /* ---------------- chat ---------------- */
+    .chat-scroll { padding: 18px 16px 8px; scroll-behavior: smooth; }
+    .chat-container { max-width: 860px; margin: 0 auto; gap: 18px; }
+
+    .welcome-screen { padding: 6vh 8px 0; gap: 12px; }
+    .welcome-orb {
+      width: 62px; height: 62px; border-radius: 20px; margin: 0 auto 4px;
+      background: var(--grad-brand); display: grid; place-items: center;
+      font-size: 1.7rem; color: #04120c;
+      box-shadow: 0 20px 50px -22px rgba(16,185,129,.9), 0 0 0 1px rgba(255,255,255,.14) inset;
+      animation: aFloat 6s ease-in-out infinite;
+    }
+    @keyframes aFloat { 0%,100% { transform: translateY(0); } 50% { transform: translateY(-6px); } }
+    .welcome-title {
+      font-size: clamp(1.5rem, 3.4vw, 2.15rem); font-weight: 800; letter-spacing: -.6px;
+      background: linear-gradient(100deg, #f4fffb, #a7f3d0 45%, #67e8f9);
+      -webkit-background-clip: text; background-clip: text; color: transparent;
+    }
+    .welcome-sub { color: var(--text-muted); font-size: .88rem; max-width: 560px; }
+    .welcome-badge {
+      display: inline-flex; align-items: center; gap: 7px; margin: 2px auto 0;
+      padding: 5px 12px; border-radius: 99px; font-size: .72rem; font-weight: 600;
+      color: #a7f3d0; background: rgba(16,185,129,.1); border: 1px solid rgba(16,185,129,.28);
+    }
+
+    .suggestion-grid { grid-template-columns: repeat(2, minmax(0, 1fr)); gap: 10px; margin-top: 14px; width: 100%; max-width: 700px; }
+    .suggestion-chip {
+      display: flex; align-items: flex-start; gap: 11px; text-align: left;
+      padding: 13px 14px; border-radius: var(--radius);
+      border: 1px solid var(--border-subtle);
+      background: linear-gradient(180deg, rgba(148,163,184,.09), rgba(148,163,184,.035));
+      transition: transform .16s ease, border-color .18s ease, box-shadow .2s ease, background .2s ease;
+    }
+    .suggestion-chip::before {
+      content: attr(data-icon); display: grid; place-items: center;
+      width: 30px; height: 30px; border-radius: 9px; flex: none; font-size: .95rem;
+      background: rgba(16,185,129,.13); border: 1px solid rgba(16,185,129,.26);
+    }
+    .suggestion-chip strong { display: block; font-size: .84rem; color: #e9fbf4; margin-bottom: 2px; }
+    .suggestion-chip span { font-size: .74rem; color: var(--text-muted); }
+    .suggestion-chip:hover {
+      transform: translateY(-2px); border-color: rgba(16,185,129,.4);
+      box-shadow: 0 18px 34px -24px rgba(16,185,129,.85);
+      background: linear-gradient(180deg, rgba(16,185,129,.12), rgba(148,163,184,.04));
+    }
+
+    .msg-row { gap: 12px; padding: 2px 0; animation: msgIn .26s ease both; }
+    @keyframes msgIn { from { opacity: 0; transform: translateY(6px); } to { opacity: 1; transform: none; } }
+    .msg-row.user { align-items: flex-end; }
+    .msg-bubble-user {
+      background: var(--grad-user); color: #04140e; font-weight: 500;
+      border-radius: 18px 18px 4px 18px; padding: 11px 15px;
+      box-shadow: 0 14px 30px -22px rgba(16,185,129,.95), 0 1px 0 rgba(255,255,255,.14) inset;
+      max-width: min(78%, 620px);
+    }
+    .msg-user-actions { opacity: 0; transition: opacity .18s ease; }
+    .msg-row.user:hover .msg-user-actions, .msg-row.user:focus-within .msg-user-actions { opacity: 1; }
+    .msg-action-btn {
+      border-radius: 8px; font-size: .7rem; padding: 3px 8px;
+      color: var(--text-muted); border: 1px solid transparent;
+      transition: background .16s ease, color .16s ease;
+    }
+    .msg-action-btn:hover { background: rgba(148,163,184,.12); color: var(--text); }
+
+    .ai-avatar {
+      width: 30px; height: 30px; border-radius: 10px; font-size: .85rem;
+      background: var(--grad-brand); color: #04120c; font-weight: 900;
+      box-shadow: 0 0 0 1px rgba(255,255,255,.16) inset, 0 10px 22px -14px rgba(16,185,129,.9);
+      margin-top: 2px;
+    }
+    .msg-ai-body { gap: 8px; max-width: 100%; }
+    .msg-ai-content, .msg-ai-text {
+      font-size: .93rem; line-height: 1.72; color: #dfe8f3;
+      background: linear-gradient(180deg, rgba(148,163,184,.055), rgba(148,163,184,.02));
+      border: 1px solid var(--border-subtle); border-radius: 4px 18px 18px 18px;
+      padding: 13px 16px;
+    }
+    .msg-ai-content p, .msg-ai-text p { margin: 0 0 .65em; }
+    .msg-ai-content p:last-child, .msg-ai-text p:last-child { margin-bottom: 0; }
+    .msg-ai-content h1, .msg-ai-content h2, .msg-ai-content h3, .msg-ai-text h3 {
+      font-size: .98rem; margin: .2em 0 .5em; color: #f2fff9; letter-spacing: -.2px;
+    }
+    .msg-ai-content ul, .msg-ai-content ol { padding-left: 1.15em; margin: .4em 0 .7em; }
+    .msg-ai-content li { margin: .22em 0; }
+    .msg-ai-content blockquote {
+      border-left: 2px solid rgba(16,185,129,.5); margin: .6em 0; padding: .2em 0 .2em .9em;
+      color: var(--text-muted);
+    }
+    .msg-ai-content table { border-collapse: collapse; width: 100%; margin: .6em 0; font-size: .84rem; }
+    .msg-ai-content th, .msg-ai-content td { border: 1px solid var(--border-subtle); padding: 6px 9px; text-align: left; }
+    .msg-ai-content th { background: rgba(148,163,184,.08); font-weight: 700; }
+    .msg-ai-content code:not(pre code) {
+      background: rgba(34,211,238,.1); border: 1px solid rgba(34,211,238,.18);
+      color: #a5f3fc; border-radius: 6px; padding: 1px 5px; font-size: .86em;
+      font-family: var(--font-mono);
+    }
+    .msg-ai-content a { color: #67e8f9; text-decoration: underline; text-underline-offset: 2px; }
+    .muted { color: var(--text-muted); font-size: .78em; }
+
+    .msg-footer { gap: 6px; opacity: .35; transition: opacity .18s ease, transform .18s ease; }
+    .msg-row.ai:hover .msg-footer, .msg-row.ai:focus-within .msg-footer { opacity: 1; }
+    .msg-footer > span:first-child {
+      font-size: .68rem; color: var(--text-muted); font-family: var(--font-mono);
+      letter-spacing: -.1px;
+    }
+    .copy-btn {
+      border-radius: 8px; font-size: .7rem; padding: 3px 9px;
+      border: 1px solid var(--border-subtle); background: rgba(148,163,184,.06);
+      color: var(--text-muted); transition: all .16s ease;
+    }
+    .copy-btn:hover { background: rgba(16,185,129,.14); color: #d9fff1; border-color: rgba(16,185,129,.35); }
+
+    /* code cards */
+    .code-card {
+      border-radius: var(--radius); border: 1px solid rgba(148,163,184,.16);
+      background: linear-gradient(180deg, #0b1220, #080d16);
+      overflow: hidden; margin: .7em 0; box-shadow: var(--shadow-1);
+    }
+    .code-card-header {
+      display: flex; align-items: center; justify-content: space-between; gap: 10px;
+      padding: 7px 10px; background: rgba(148,163,184,.07);
+      border-bottom: 1px solid var(--border-subtle);
+      font-family: var(--font-mono); font-size: .68rem; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .code-card-body { padding: 12px 14px; overflow-x: auto; }
+    .code-card-body pre, .code-card pre {
+      margin: 0; background: transparent; border: none; padding: 0;
+      font-family: var(--font-mono); font-size: .82rem; line-height: 1.62;
+    }
+    .code-card .code-status { text-transform: none; letter-spacing: 0; }
+    .typing-cursor { color: var(--accent-2); animation: caret 1s steps(2) infinite; }
+    @keyframes caret { 50% { opacity: 0; } }
+    .typing-dots span { background: var(--accent-2); }
+
+    /* ---------------- composer ---------------- */
+    .input-wrapper { padding: 10px 16px 14px; }
+    .input-wrapper::before {
+      content: ""; position: absolute; left: 0; right: 0; top: -34px; height: 34px;
+      background: linear-gradient(180deg, transparent, rgba(10,14,20,.9));
+      pointer-events: none;
+    }
+    .composer {
+      max-width: 860px; margin: 0 auto; padding: 10px 12px 8px;
+      border-radius: var(--radius-lg);
+      background: linear-gradient(180deg, rgba(22,30,42,.96), rgba(13,19,27,.97));
+      border: 1px solid var(--border);
+      box-shadow: var(--shadow-1);
+      transition: border-color .2s ease, box-shadow .24s ease, transform .2s ease;
+    }
+    .composer:focus-within {
+      border-color: rgba(16,185,129,.55);
+      box-shadow: var(--shadow-glow);
+    }
+    .composer-row { display: flex; align-items: flex-end; gap: 8px; }
+    .composer textarea {
+      flex: 1; min-height: 26px; max-height: 220px; resize: none;
+      background: transparent; border: none; outline: none; color: var(--text);
+      font-family: inherit; font-size: .93rem; line-height: 1.6; padding: 6px 2px;
+    }
+    .composer textarea::placeholder { color: #6f8299; }
+    .composer-tools {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      padding-top: 6px; margin-top: 4px; border-top: 1px solid var(--border-subtle);
+    }
+    .composer-tools .spacer { flex: 1; }
+    .tool-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 9px; border-radius: 9px; font-size: .72rem; font-weight: 600;
+      color: var(--text-muted); background: rgba(148,163,184,.07);
+      border: 1px solid var(--border-subtle); cursor: pointer;
+      transition: all .16s ease;
+    }
+    .tool-btn:hover { color: var(--text); background: rgba(148,163,184,.14); transform: translateY(-1px); }
+    .tool-btn.active {
+      color: #d9fff1; border-color: rgba(16,185,129,.45);
+      background: rgba(16,185,129,.16); box-shadow: 0 6px 18px -14px rgba(16,185,129,.9);
+    }
+    .composer-hint {
+      max-width: 860px; margin: 7px auto 0; display: flex; align-items: center;
+      justify-content: space-between; gap: 10px; font-size: .68rem; color: #6f8299;
+    }
+    .composer-hint kbd {
+      font-family: var(--font-mono); font-size: .64rem; padding: 1px 5px;
+      border: 1px solid var(--border); border-bottom-width: 2px; border-radius: 5px;
+      background: rgba(148,163,184,.08); color: #b9c8d9;
+    }
+    .send-btn {
+      width: 38px; height: 38px; border-radius: 12px; font-size: 1.05rem; font-weight: 800;
+      background: var(--grad-brand); color: #04120c;
+      box-shadow: 0 12px 28px -16px rgba(16,185,129,.95), 0 1px 0 rgba(255,255,255,.22) inset;
+      transition: transform .16s ease, filter .16s ease, opacity .16s ease;
+    }
+    .send-btn:hover:not(:disabled) { transform: translateY(-1px) scale(1.03); filter: brightness(1.06); }
+    .send-btn:active:not(:disabled) { transform: scale(.96); }
+    .send-btn:disabled { opacity: .45; filter: grayscale(.4); cursor: not-allowed; }
+    .send-btn.stopping { background: linear-gradient(135deg, #f87171, #ef4444); color: #1a0505; }
+
+    .demo-banner {
+      max-width: 860px; margin: 0 auto 8px; display: flex; align-items: center; gap: 9px;
+      padding: 8px 12px; border-radius: 12px; font-size: .76rem; line-height: 1.45;
+      color: #fde68a; background: rgba(251,191,36,.09);
+      border: 1px solid rgba(251,191,36,.3);
+    }
+    .demo-banner strong { color: #fcd34d; }
+    .demo-banner button {
+      margin-left: auto; flex: none; font-size: .7rem; font-weight: 700;
+      padding: 4px 10px; border-radius: 8px; cursor: pointer;
+      background: rgba(251,191,36,.16); border: 1px solid rgba(251,191,36,.4); color: #fde68a;
+    }
+    .demo-banner button:hover { background: rgba(251,191,36,.26); }
+
+    /* buttons elsewhere */
+    .btn-subtle {
+      border-radius: 10px; border: 1px solid var(--border); background: rgba(148,163,184,.06);
+      color: #cfdae8; font-size: .76rem; font-weight: 600; padding: 7px 11px;
+      transition: all .16s ease;
+    }
+    .btn-subtle:hover { background: rgba(148,163,184,.14); color: #fff; transform: translateY(-1px); }
+    .btn-firehose {
+      border-radius: 11px; border: 1px solid rgba(16,185,129,.42);
+      background: linear-gradient(135deg, rgba(16,185,129,.95), rgba(13,148,136,.92));
+      color: #04120c; font-weight: 800; letter-spacing: .2px;
+      box-shadow: 0 14px 30px -20px rgba(16,185,129,.95);
+      transition: transform .16s ease, filter .16s ease;
+    }
+    .btn-firehose:hover { transform: translateY(-1px); filter: brightness(1.06); }
+    .lab-panel { border-radius: var(--radius); background: linear-gradient(180deg, rgba(148,163,184,.06), rgba(148,163,184,.02)); border: 1px solid var(--border-subtle); }
+    input[type="text"], input[type="search"], textarea {
+      font-family: inherit; color: var(--text);
+    }
+    .lab-container input[type="text"], .gallery-toolbar input[type="text"] {
+      background: rgba(9,13,19,.85); border: 1px solid var(--border); border-radius: 10px;
+      padding: 8px 11px; font-size: .82rem;
+    }
+    .lab-container input[type="text"]:focus, .gallery-toolbar input[type="text"]:focus {
+      outline: none; border-color: rgba(34,211,238,.5); box-shadow: 0 0 0 3px rgba(34,211,238,.1);
+    }
+
+    /* ---------------- toasts + fab ---------------- */
+    .toast-host {
+      position: fixed; left: 50%; bottom: 26px; transform: translateX(-50%);
+      z-index: 400; display: flex; flex-direction: column; gap: 8px; align-items: center;
+      pointer-events: none; width: min(92vw, 460px);
+    }
+    .toast {
+      pointer-events: auto; width: 100%;
+      display: flex; align-items: center; gap: 9px;
+      padding: 10px 13px; border-radius: 12px; font-size: .8rem; font-weight: 500;
+      background: rgba(16,23,34,.97); color: #e8f3ff;
+      border: 1px solid var(--border); box-shadow: 0 22px 46px -26px rgba(0,0,0,.95);
+      animation: toastIn .26s cubic-bezier(.2,.9,.3,1.2) both;
+      backdrop-filter: blur(12px);
+    }
+    .toast.ok { border-color: rgba(16,185,129,.5); }
+    .toast.err { border-color: rgba(248,113,113,.55); color: #ffe4e6; }
+    .toast.info { border-color: rgba(34,211,238,.45); }
+    .toast .ico { flex: none; font-size: .95rem; }
+    @keyframes toastIn { from { opacity: 0; transform: translateY(12px) scale(.97); } to { opacity: 1; transform: none; } }
+    .toast.leaving { animation: toastOut .2s ease forwards; }
+    @keyframes toastOut { to { opacity: 0; transform: translateY(8px) scale(.98); } }
+
+    .scroll-fab {
+      position: absolute; right: 22px; bottom: 18px; z-index: 30;
+      width: 40px; height: 40px; border-radius: 50%;
+      display: none; place-items: center; cursor: pointer;
+      color: #d9fff1; font-size: 1rem;
+      background: rgba(16,23,34,.95); border: 1px solid rgba(16,185,129,.4);
+      box-shadow: 0 18px 34px -20px rgba(0,0,0,.95);
+      transition: transform .16s ease, background .16s ease;
+    }
+    .scroll-fab.show { display: grid; }
+    .scroll-fab:hover { transform: translateY(-2px); background: rgba(16,185,129,.2); }
+
+    .sidebar-overlay {
+      position: fixed; inset: 0; z-index: 90; display: none;
+      background: rgba(3,7,12,.6); backdrop-filter: blur(2px);
+    }
+    .sidebar-overlay.show { display: block; }
+
+    @media (max-width: 820px) {
+      .suggestion-grid { grid-template-columns: 1fr; max-width: 100%; }
+      .chat-container { max-width: 100%; }
+      .msg-bubble-user { max-width: 88%; }
+      .msg-footer { opacity: .8; }
+      .composer-hint .kbd-hint { display: none; }
+      .demo-banner { font-size: .72rem; flex-wrap: wrap; }
+      .scroll-fab { right: 14px; bottom: 12px; }
+    }
+    @media (prefers-reduced-motion: reduce) {
+      *, *::before, *::after { animation-duration: .001ms !important; animation-iteration-count: 1 !important; transition-duration: .001ms !important; }
+      .welcome-orb { animation: none; }
+    }
+
+
+    /* chat shell + misc polish */
+    #tab-chat { position: relative; }
+    .msg-badge {
+      font-family: var(--font-mono); font-size: .67rem; letter-spacing: -.1px;
+      color: var(--text-muted); line-height: 1.35;
+    }
+    .history-del-btn {
+      opacity: 0; border-radius: 7px; transition: opacity .15s ease, background .15s ease, color .15s ease;
+    }
+    .history-item:hover .history-del-btn, .history-item.active .history-del-btn { opacity: 1; }
+    .history-del-btn:hover { background: rgba(248,113,113,.18); color: #fca5a5; }
+    #terminalDrawer {
+      background: linear-gradient(180deg, rgba(9,13,22,.98), rgba(6,9,15,.99)) !important;
+      border: 1px solid rgba(16,185,129,.28) !important;
+      border-radius: 16px !important;
+      box-shadow: var(--shadow-1);
+    }
+    #drawerOutput { border-radius: 10px !important; }
+    .sub-metric { font-size: .7rem; color: var(--text-muted); }
+    .card-row { align-items: baseline; }
+
+
+    /* models panel */
+    .models-modal {
+      position: fixed; inset: 0; z-index: 500; display: none;
+      align-items: center; justify-content: center; padding: 20px;
+      background: rgba(3,7,12,.72); backdrop-filter: blur(6px);
+    }
+    .models-modal.open { display: flex; }
+    .models-panel {
+      width: min(760px, 100%); max-height: 86vh; display: flex; flex-direction: column;
+      border-radius: 20px; overflow: hidden;
+      background: linear-gradient(180deg, #101823, #0a0f17);
+      border: 1px solid var(--border);
+      box-shadow: 0 40px 90px -40px rgba(0,0,0,.95);
+      animation: msgIn .22s ease both;
+    }
+    .models-head {
+      display: flex; align-items: flex-start; gap: 12px; padding: 16px 18px 12px;
+      border-bottom: 1px solid var(--border-subtle);
+    }
+    .models-head h2 { font-size: 1rem; margin: 0 0 3px; letter-spacing: -.2px; }
+    .models-head p { margin: 0; font-size: .76rem; color: var(--text-muted); line-height: 1.5; }
+    .models-head .icon-btn { margin-left: auto; }
+    .models-list { padding: 12px 18px; overflow-y: auto; display: flex; flex-direction: column; gap: 8px; }
+    .model-row {
+      display: flex; align-items: center; gap: 12px; padding: 11px 12px;
+      border-radius: 12px; border: 1px solid var(--border-subtle);
+      background: rgba(148,163,184,.05);
+    }
+    .model-row .m-name { font-size: .82rem; font-weight: 600; color: #e6eef8; word-break: break-all; }
+    .model-row .m-meta { font-size: .7rem; color: var(--text-muted); margin-top: 2px; }
+    .model-row .m-state { margin-left: auto; flex: none; display: flex; align-items: center; gap: 8px; }
+    .state-pill {
+      font-size: .66rem; font-weight: 700; padding: 3px 8px; border-radius: 99px;
+      border: 1px solid var(--border); color: var(--text-muted); white-space: nowrap;
+    }
+    .state-pill.ready { color: #6ee7b7; border-color: rgba(16,185,129,.45); background: rgba(16,185,129,.12); }
+    .state-pill.downloading { color: #7dd3fc; border-color: rgba(56,189,248,.45); background: rgba(56,189,248,.12); }
+    .state-pill.missing { color: #fcd34d; border-color: rgba(251,191,36,.35); background: rgba(251,191,36,.1); }
+    .model-row button {
+      font-size: .7rem; font-weight: 700; padding: 5px 10px; border-radius: 8px; cursor: pointer;
+      color: #d9fff1; background: rgba(16,185,129,.16); border: 1px solid rgba(16,185,129,.4);
+    }
+    .model-row button:hover { background: rgba(16,185,129,.26); }
+    .model-row button:disabled { opacity: .45; cursor: not-allowed; }
+    .models-empty { padding: 18px; text-align: center; color: var(--text-muted); font-size: .8rem; }
+    .models-foot {
+      display: flex; align-items: center; gap: 10px; justify-content: space-between;
+      padding: 10px 18px; border-top: 1px solid var(--border-subtle);
+      font-size: .72rem; color: var(--text-muted);
+    }
+    .models-foot code { font-family: var(--font-mono); color: #a5f3fc; font-size: .95em; }
+
+    /* composer meta layout */
+    .composer-tools select {
+      background: rgba(9,13,19,.9); border: 1px solid var(--border); border-radius: 9px;
+      padding: 4px 7px; font-size: .72rem; color: var(--text);
+    }
+
   </style>
 </head>
 <body>
   <aside class="sidebar" id="sidebar">
     <div class="sidebar-header">
-      <button class="btn-new-chat" onclick="newChat()">
-        <span>＋</span> New chat
-      </button>
-      <button class="icon-btn" onclick="toggleSidebar()" title="Close sidebar">☰</button>
+      <div class="sidebar-brand">
+        <span class="orb">✦</span>
+        <span class="brand-text">ARGON-OMEGA<small>offline studio</small></span>
+      </div>
+      <button class="icon-btn" onclick="toggleSidebar()" title="Close sidebar (Ctrl+B)">☰</button>
     </div>
 
+    <button class="btn-new-chat" style="margin:0 12px 10px;" onclick="newChat()">
+      <span>＋</span> New chat
+    </button>
+
+    <label class="sidebar-search" for="chatSearchInput">
+      <span>🔎</span>
+      <input id="chatSearchInput" type="text" placeholder="Search chats…" autocomplete="off" oninput="filterHistory(this.value)" />
+    </label>
+
     <div class="sidebar-section-header">
-      <span class="sidebar-section-title">Recent Chats</span>
+      <span class="sidebar-section-title">Recent chats</span>
       <button class="clear-all-btn" onclick="clearAllChats()" title="Delete all chats">Clear all</button>
     </div>
     <div class="history-list" id="historyList"></div>
@@ -980,6 +1579,17 @@ HTML_UI = r"""<!DOCTYPE html>
         <div class="progress-bar"><div class="progress-fill" id="romProgress"></div></div>
         <div class="sub-metric" id="totalRows">Brains: 0 • Memories: <span id="memoryRows">0</span></div>
       </div>
+      <div class="card" style="padding:9px 12px;cursor:pointer;" onclick="openModels()" title="Manage models">
+        <div class="card-row">
+          <span class="card-label">Engine</span>
+          <span class="metric" id="engineState" style="font-size:0.72rem;">checking…</span>
+        </div>
+        <div class="sub-metric" id="engineDetail" style="margin-top:4px;">—</div>
+      </div>
+    </div>
+    <div class="sidebar-foot">
+      <span class="dot"></span>
+      <span id="sidebarFootText">100% offline · nothing leaves this machine</span>
     </div>
   </aside>
 
@@ -991,6 +1601,7 @@ HTML_UI = r"""<!DOCTYPE html>
           <span>ARGON-OMEGA</span>
           <span class="tag">99.9% SSD ROM</span>
         </div>
+        <span class="top-chip" id="demoChip" style="display:none;" title="No GGUF installed — replies are simulated locally">🧪 Demo Brain</span>
       </div>
       <div class="topbar-controls" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; width:100%;">
         <span style="font-size:0.75rem;color:var(--text-secondary);">🧠 Brain:</span>
@@ -1031,40 +1642,40 @@ HTML_UI = r"""<!DOCTYPE html>
       <div class="chat-scroll" id="chatScroll">
         <div class="chat-container" id="chatBox">
           <div class="welcome-screen" id="welcomeScreen">
+            <div class="welcome-orb">✦</div>
             <div class="welcome-title">What can I help with?</div>
             <div class="welcome-sub">100% offline AI powered by your local SSD ROM &amp; llama-server.</div>
+            <div class="welcome-badge" id="welcomeBadge">⚡ Local engine ready</div>
             <div class="suggestion-grid">
-              <button class="suggestion-chip" onclick="useSuggestion('Explain how mmap works in llama-server')">
-                <strong>Explain mmap</strong>
-                <span>How local model memory mapping works</span>
+              <button class="suggestion-chip" data-icon="🧠" onclick="useSuggestion('Explain how mmap works in llama-server')">
+                <span><strong>Explain mmap</strong>
+                <span>How local model memory mapping works</span></span>
               </button>
-              <button class="suggestion-chip" onclick="useSuggestion('Write a Python script to scan a directory for large files')">
-                <strong>Write a Python script</strong>
-                <span>Scan a directory for large files</span>
+              <button class="suggestion-chip" data-icon="🐍" onclick="useSuggestion('Write a Python script to scan a directory for large files')">
+                <span><strong>Write a Python script</strong>
+                <span>Scan a directory for large files</span></span>
               </button>
-              <button class="suggestion-chip" onclick="useSuggestion('Remember that my favorite language is Python')">
-                <strong>Save to memory</strong>
-                <span>Store a personal fact in SSD ROM</span>
+              <button class="suggestion-chip" data-icon="💾" onclick="useSuggestion('Remember that my favorite language is Python')">
+                <span><strong>Save to memory</strong>
+                <span>Store a personal fact in SSD ROM</span></span>
               </button>
-              <button class="suggestion-chip" onclick="useSuggestion('What are common SQL injection vulnerabilities and how to fix them?')">
-                <strong>Security advice</strong>
-                <span>SQL injection patterns &amp; fixes</span>
+              <button class="suggestion-chip" data-icon="🛡️" onclick="useSuggestion('What are common SQL injection vulnerabilities and how to fix them?')">
+                <span><strong>Security advice</strong>
+                <span>SQL injection patterns &amp; fixes</span></span>
               </button>
             </div>
           </div>
         </div>
       </div>
 
+      <button type="button" id="scrollFab" class="scroll-fab" onclick="jumpToBottom()" title="Scroll to latest message">↓</button>
+
       <div class="input-wrapper">
         <div id="terminalDrawer" style="display:none;max-width:768px;margin:0 auto 10px;background:#090d16;border:1px solid rgba(16,185,129,0.4);border-radius:14px;padding:10px 12px;font-family:ui-monospace,Consolas,monospace;">
           <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
             <span style="font-size:0.78rem;color:#34d399;font-weight:700;">💻 Read-Only Terminal &amp; Python Sandbox</span>
-            <div style="display:flex;gap:6px;flex-wrap:wrap;">
-              <button type="button" class="btn-subtle" onclick="runDrawerCmd('terminal','ipconfig')" style="font-size:0.72rem;padding:3px 8px;">$ ipconfig</button>
-              <button type="button" class="btn-subtle" onclick="runDrawerCmd('terminal','netstat -ano')" style="font-size:0.72rem;padding:3px 8px;">$ netstat -ano</button>
-              <button type="button" class="btn-subtle" onclick="runDrawerCmd('terminal','tasklist')" style="font-size:0.72rem;padding:3px 8px;">$ tasklist</button>
-              <button type="button" class="btn-subtle" onclick="runDrawerCmd('terminal','whoami')" style="font-size:0.72rem;padding:3px 8px;">$ whoami</button>
-              <button type="button" class="btn-subtle" onclick="runDrawerCmd('python','print([x**2 for x in range(1, 11)])')" style="font-size:0.72rem;padding:3px 8px;">🧪 Test Python Sandbox</button>
+            <div id="drawerQuickCmds" style="display:flex;gap:6px;flex-wrap:wrap;">
+              <button type="button" class="tool-btn" onclick="runDrawerCmd('terminal','whoami')">$ whoami</button>
             </div>
           </div>
           <div style="display:flex;gap:8px;margin-bottom:8px;">
@@ -1077,18 +1688,34 @@ HTML_UI = r"""<!DOCTYPE html>
           </div>
           <pre id="drawerOutput" style="margin:0;max-height:160px;overflow-y:auto;font-size:0.78rem;color:#34d399;white-space:pre-wrap;background:#04070d;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);">Ready (Read-Only Guard Active).</pre>
         </div>
-        <form class="input-pill" onsubmit="sendMessage(event)">
-          <button type="button" id="imageModeBtn" class="img-toggle-btn" onclick="toggleImageMode()" title="Toggle Image Generation Mode">🎨 Image</button>
-          <button type="button" id="terminalToggleBtn" class="img-toggle-btn" onclick="toggleTerminalDrawer()" title="Toggle Read-Only Terminal & Sandbox">💻 Terminal</button>
-          <textarea id="promptInput" rows="1" placeholder="Message ARGON-OMEGA (or type $ ipconfig / run: print(2**10))..." autocomplete="off"></textarea>
-          <select id="thinkingLevelSelect" title="Thinking Level (Low = Fast, Mid = Balanced, High = Deep)" style="background:rgba(15,23,42,0.85);color:#cbd5e1;border:1px solid rgba(255,255,255,0.14);border-radius:8px;padding:4px 8px;font-size:0.75rem;margin-right:6px;">
-            <option value="low">⚡ Low</option>
-            <option value="mid" selected>⚖️ Mid</option>
-            <option value="high">🧠 High</option>
-          </select>
-          <button type="submit" id="sendBtn" class="send-btn" title="Send">↑</button>
+        <div id="demoBanner" class="demo-banner" style="display:none;">
+          <span>🧪</span>
+          <span><strong>Demo Brain active</strong> — no GGUF weights installed, so replies are simulated locally. The rest of the app is fully live.</span>
+          <button type="button" onclick="openModelHelp()">Get real models</button>
+        </div>
+        <form class="composer" id="composer" onsubmit="sendMessage(event)">
+          <div class="composer-row">
+            <textarea id="promptInput" rows="1" placeholder="Message ARGON-OMEGA — ask for code, an explanation, or say “remember that …”" autocomplete="off"></textarea>
+            <button type="submit" id="sendBtn" class="send-btn" title="Send (Enter)">↑</button>
+          </div>
+          <div class="composer-tools">
+            <button type="button" id="imageModeBtn" class="tool-btn" onclick="toggleImageMode()" title="Toggle image generation mode">🎨 Image</button>
+            <button type="button" id="terminalToggleBtn" class="tool-btn" onclick="toggleTerminalDrawer()" title="Toggle read-only terminal &amp; sandbox">💻 Terminal</button>
+            <button type="button" class="tool-btn" onclick="newChat()" title="Start a new chat (Ctrl+Shift+O)">✧ New chat</button>
+            <button type="button" id="quantumToggleBtn" class="tool-btn active" onclick="toggleQuantumMode()" title="Quantum reasoning enabled">⚛️ Quantum ON</button>
+            <span class="spacer"></span>
+            <select id="thinkingLevelSelect" title="Thinking level: Low = fast, Mid = balanced, High = deep">
+              <option value="low">⚡ Low</option>
+              <option value="mid" selected>⚖️ Mid</option>
+              <option value="high">🧠 High</option>
+            </select>
+            <span id="charCount" style="font-size:.68rem;color:#6f8299;font-variant-numeric:tabular-nums;">0</span>
+          </div>
         </form>
-        <div class="disclaimer">ARGON-OMEGA runs 100% offline. Responses come from your local SSD ROM &amp; llama-server.</div>
+        <div class="composer-hint">
+          <span class="kbd-hint"><kbd>Enter</kbd> send · <kbd>Shift</kbd>+<kbd>Enter</kbd> newline · <kbd>Ctrl</kbd>+<kbd>K</kbd> focus · <kbd>Esc</kbd> stop</span>
+          <span id="composerStatus">100% offline · local SSD ROM</span>
+        </div>
       </div>
     </div>
 
@@ -1344,6 +1971,29 @@ HTML_UI = r"""<!DOCTYPE html>
     </div>
   </main>
 
+  <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebarOnMobile()"></div>
+
+  <div id="modelsModal" class="models-modal" onclick="if(event.target===this)closeModels()">
+    <div class="models-panel" role="dialog" aria-modal="true" aria-label="Models">
+      <header class="models-head">
+        <div>
+          <h2>🧠 Brains &amp; models</h2>
+          <p id="modelsSub">Local GGUF files the studio can run. Nothing is uploaded anywhere.</p>
+        </div>
+        <button class="btn-subtle" onclick="downloadRecommendedModels()" style="white-space:nowrap;">⬇ Recommended (~5.5 GB)</button>
+        <button class="icon-btn" onclick="closeModels()" title="Close">✕</button>
+      </header>
+      <div id="modelsList" class="models-list">
+        <div class="models-empty">Loading model catalog…</div>
+      </div>
+      <footer class="models-foot">
+        <span id="modelsFootNote">Tip: <code>python download_models.py --recommended</code> fetches the ~5.5 GB starter set from a terminal.</span>
+        <button class="btn-subtle" onclick="refreshModels()">↻ Refresh</button>
+      </footer>
+    </div>
+  </div>
+  <div id="toastHost" class="toast-host" aria-live="polite"></div>
+
   <div id="lightboxModal" class="lightbox-modal" onclick="closeFullscreen()">
     <img id="lightboxImg" src="" alt="Fullscreen preview" />
   </div>
@@ -1371,15 +2021,26 @@ HTML_UI = r"""<!DOCTYPE html>
     function toggleSidebar() {
       const sb = document.getElementById('sidebar');
       const openBtn = document.getElementById('openSidebarBtn');
-      sb.classList.toggle('collapsed');
-      openBtn.style.display = sb.classList.contains('collapsed') ? 'flex' : 'none';
+      const overlay = document.getElementById('sidebarOverlay');
+      if (!sb) return;
+      const collapsed = sb.classList.toggle('collapsed');
+      if (openBtn) openBtn.style.display = collapsed ? 'flex' : 'none';
+      if (overlay) overlay.classList.toggle('show', !collapsed && window.innerWidth <= 820);
     }
 
     function switchTab(name, btn) {
       document.querySelectorAll('.tab-view').forEach(el => el.classList.remove('active'));
       document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
-      document.getElementById('tab-' + name).classList.add('active');
-      btn.classList.add('active');
+      const view = document.getElementById('tab-' + name);
+      if (view) view.classList.add('active');
+      let target = btn;
+      if (!target) {
+        target = [...document.querySelectorAll('.tab-btn')].find(
+          b => (b.getAttribute('onclick') || '').includes(`switchTab('${name}'`)
+        );
+      }
+      if (target) target.classList.add('active');
+      if (name === 'chat') { updateScrollFab(); }
     }
 
     function renderHistory() {
@@ -1417,140 +2078,6 @@ HTML_UI = r"""<!DOCTYPE html>
 
 
 
-    function ideRenderTabs() {
-      const bar = document.getElementById('ideTabs');
-      bar.innerHTML = '';
-      ideOpenTabs.forEach(t => {
-        const tab = document.createElement('div');
-        const active = t.path === ideActivePath;
-        tab.style.cssText = `padding:6px 10px;font-size:0.78rem;cursor:pointer;display:flex;align-items:center;gap:6px;border-right:1px solid #2d2d2d;background:${active ? '#1e1e1e' : '#2d2d2d'};color:${active ? '#fff' : '#9cdcfe'};`;
-        tab.onclick = () => { ideActivePath = t.path; ideRenderTabs(); };
-        tab.innerHTML = `<span>${t.dirty ? '● ' : ''}${t.name}</span><span onclick="event.stopPropagation();ideCloseTab('${t.path.replace(/\\/g, '\\\\')}')" style="color:#858585;">×</span>`;
-        bar.appendChild(tab);
-      });
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      const ed = document.getElementById('ideEditor');
-      ed.value = cur ? cur.content : '';
-      document.getElementById('ideActivePath').textContent = cur ? cur.path : 'No file open';
-      ideUpdateLineNums();
-      if (cur && cur.name.toLowerCase().endsWith('.html')) {
-        document.getElementById('idePreviewFrame').srcdoc = cur.content;
-      }
-    }
-
-    function ideCloseTab(path) {
-      ideOpenTabs = ideOpenTabs.filter(t => t.path !== path);
-      if (ideActivePath === path) ideActivePath = ideOpenTabs.length ? ideOpenTabs[0].path : null;
-      ideRenderTabs();
-    }
-
-    function ideOnEdit() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (cur) {
-        cur.content = document.getElementById('ideEditor').value;
-        cur.dirty = true;
-        ideRenderTabs();
-      }
-      ideUpdateLineNums();
-    }
-
-    function ideUpdateLineNums() {
-      const lines = document.getElementById('ideEditor').value.split('\n').length;
-      document.getElementById('ideLineNums').textContent = Array.from({length: lines}, (_, i) => i + 1).join('\n');
-    }
-
-    function ideUpdateCursor() {
-      const ed = document.getElementById('ideEditor');
-      const upTo = ed.value.substring(0, ed.selectionStart).split('\n');
-      document.getElementById('ideCursorPos').textContent = `Ln ${upTo.length}, Col ${upTo[upTo.length - 1].length + 1}`;
-    }
-
-    async function ideSaveActive() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (!cur) return;
-      const res = await fetch('/api/ide/files', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action:'save', path: cur.path, content: cur.content }) });
-      const data = await res.json();
-      if (data.ok) { cur.dirty = false; ideRenderTabs(); }
-    }
-
-    function ideTermKey(e) {
-      const inp = document.getElementById('ideTermInput');
-      if (e.key === 'Enter') {
-        const cmd = inp.value.trim();
-        if (!cmd) return;
-        ideTermHistory.push(cmd);
-        ideTermHistIdx = ideTermHistory.length;
-        inp.value = '';
-        ideRunTerminal(cmd);
-      } else if (e.key === 'ArrowUp' && ideTermHistIdx > 0) {
-        ideTermHistIdx--;
-        inp.value = ideTermHistory[ideTermHistIdx];
-      } else if (e.key === 'ArrowDown' && ideTermHistIdx < ideTermHistory.length - 1) {
-        ideTermHistIdx++;
-        inp.value = ideTermHistory[ideTermHistIdx];
-      }
-    }
-
-    async function ideRunTerminal(cmd = null, runFile = null) {
-      const out = document.getElementById('ideTermOut');
-      const res = await fetch('/api/ide/terminal', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ cmd, run_file: runFile }) });
-      const data = await res.json();
-      document.getElementById('ideTermCwd').textContent = data.cwd || '';
-      if (data.stderr) ideLastError = data.stderr;
-      const text = [cmd ? `PS> ${cmd}` : `▶ Running ${runFile}`, data.stdout, data.stderr].filter(Boolean).join('\n');
-      out.textContent += (out.textContent ? '\n' : '') + text + '\n';
-      out.scrollTop = out.scrollHeight;
-    }
-
-    async function ideRunActiveFile() {
-      if (!ideActivePath) return;
-      await ideSaveActive();
-      ideRunTerminal(null, ideActivePath);
-    }
-
-    function ideSwitchRight(which) {
-      document.getElementById('ideAiPane').style.display = which === 'ai' ? 'flex' : 'none';
-      document.getElementById('idePreviewPane').style.display = which === 'preview' ? 'flex' : 'none';
-      document.getElementById('ideRightAiBtn').style.background = which === 'ai' ? '#094771' : '';
-      document.getElementById('ideRightPrevBtn').style.background = which === 'preview' ? '#094771' : '';
-    }
-
-    async function ideAiAssist(preset = null, includeErr = false) {
-      const inp = document.getElementById('ideAiPrompt');
-      const prompt = preset || inp.value.trim();
-      if (!prompt) return;
-      if (!preset) inp.value = '';
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      const out = document.getElementById('ideAiOutput');
-      out.textContent = '⏳ Antigravity AI is thinking...';
-      const res = await fetch('/api/ide/ai_assist', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          prompt,
-          filename: cur ? cur.name : 'untitled',
-          code: cur ? cur.content : '',
-          error: includeErr ? ideLastError : ''
-        })
-      });
-      const data = await res.json();
-      out.textContent = data.reply || 'No response.';
-      const m = (data.reply || '').match(/```[\w]*\n([\s\S]*?)```/);
-      if (m) {
-        ideLastAiCode = m[1];
-        document.getElementById('ideApplyBtn').style.display = 'block';
-      } else {
-        document.getElementById('ideApplyBtn').style.display = 'none';
-      }
-    }
-
-    function ideApplyCode() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (!cur || !ideLastAiCode) return;
-      cur.content = ideLastAiCode;
-      cur.dirty = true;
-      ideRenderTabs();
-    }
 
     renderHistory();
       }
@@ -1572,169 +2099,10 @@ HTML_UI = r"""<!DOCTYPE html>
     function newChat() {
       currentChatId = null;
       const box = document.getElementById('chatBox');
-      box.innerHTML = `
-        <div class="welcome-screen" id="welcomeScreen">
-          <div class="welcome-title">What can I help with?</div>
-          <div class="welcome-sub">100% offline AI powered by your local SSD ROM &amp; llama-server.</div>
-          <div class="suggestion-grid">
-            <button class="suggestion-chip" onclick="useSuggestion('Explain how mmap works in llama-server')">
-              <strong>Explain mmap</strong>
-              <span>How local model memory mapping works</span>
-            </button>
-            <button class="suggestion-chip" onclick="useSuggestion('Write a Python script to scan a directory for large files')">
-              <strong>Write a Python script</strong>
-              <span>Scan a directory for large files</span>
-            </button>
-            <button class="suggestion-chip" onclick="useSuggestion('Remember that my favorite language is Python')">
-              <strong>Save to memory</strong>
-              <span>Store a personal fact in SSD ROM</span>
-            </button>
-            <button class="suggestion-chip" onclick="useSuggestion('What are common SQL injection vulnerabilities and how to fix them?')">
-              <strong>Security advice</strong>
-              <span>SQL injection patterns &amp; fixes</span>
-            </button>
-          </div>
-        </div>`;
-
-
-
-
-    function ideRenderTabs() {
-      const bar = document.getElementById('ideTabs');
-      bar.innerHTML = '';
-      ideOpenTabs.forEach(t => {
-        const tab = document.createElement('div');
-        const active = t.path === ideActivePath;
-        tab.style.cssText = `padding:6px 10px;font-size:0.78rem;cursor:pointer;display:flex;align-items:center;gap:6px;border-right:1px solid #2d2d2d;background:${active ? '#1e1e1e' : '#2d2d2d'};color:${active ? '#fff' : '#9cdcfe'};`;
-        tab.onclick = () => { ideActivePath = t.path; ideRenderTabs(); };
-        tab.innerHTML = `<span>${t.dirty ? '● ' : ''}${t.name}</span><span onclick="event.stopPropagation();ideCloseTab('${t.path.replace(/\\/g, '\\\\')}')" style="color:#858585;">×</span>`;
-        bar.appendChild(tab);
-      });
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      const ed = document.getElementById('ideEditor');
-      ed.value = cur ? cur.content : '';
-      document.getElementById('ideActivePath').textContent = cur ? cur.path : 'No file open';
-      ideUpdateLineNums();
-      if (cur && cur.name.toLowerCase().endsWith('.html')) {
-        document.getElementById('idePreviewFrame').srcdoc = cur.content;
-      }
-    }
-
-    function ideCloseTab(path) {
-      ideOpenTabs = ideOpenTabs.filter(t => t.path !== path);
-      if (ideActivePath === path) ideActivePath = ideOpenTabs.length ? ideOpenTabs[0].path : null;
-      ideRenderTabs();
-    }
-
-    function ideOnEdit() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (cur) {
-        cur.content = document.getElementById('ideEditor').value;
-        cur.dirty = true;
-        ideRenderTabs();
-      }
-      ideUpdateLineNums();
-    }
-
-    function ideUpdateLineNums() {
-      const lines = document.getElementById('ideEditor').value.split('\n').length;
-      document.getElementById('ideLineNums').textContent = Array.from({length: lines}, (_, i) => i + 1).join('\n');
-    }
-
-    function ideUpdateCursor() {
-      const ed = document.getElementById('ideEditor');
-      const upTo = ed.value.substring(0, ed.selectionStart).split('\n');
-      document.getElementById('ideCursorPos').textContent = `Ln ${upTo.length}, Col ${upTo[upTo.length - 1].length + 1}`;
-    }
-
-    async function ideSaveActive() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (!cur) return;
-      const res = await fetch('/api/ide/files', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action:'save', path: cur.path, content: cur.content }) });
-      const data = await res.json();
-      if (data.ok) { cur.dirty = false; ideRenderTabs(); }
-    }
-
-    function ideTermKey(e) {
-      const inp = document.getElementById('ideTermInput');
-      if (e.key === 'Enter') {
-        const cmd = inp.value.trim();
-        if (!cmd) return;
-        ideTermHistory.push(cmd);
-        ideTermHistIdx = ideTermHistory.length;
-        inp.value = '';
-        ideRunTerminal(cmd);
-      } else if (e.key === 'ArrowUp' && ideTermHistIdx > 0) {
-        ideTermHistIdx--;
-        inp.value = ideTermHistory[ideTermHistIdx];
-      } else if (e.key === 'ArrowDown' && ideTermHistIdx < ideTermHistory.length - 1) {
-        ideTermHistIdx++;
-        inp.value = ideTermHistory[ideTermHistIdx];
-      }
-    }
-
-    async function ideRunTerminal(cmd = null, runFile = null) {
-      const out = document.getElementById('ideTermOut');
-      const res = await fetch('/api/ide/terminal', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ cmd, run_file: runFile }) });
-      const data = await res.json();
-      document.getElementById('ideTermCwd').textContent = data.cwd || '';
-      if (data.stderr) ideLastError = data.stderr;
-      const text = [cmd ? `PS> ${cmd}` : `▶ Running ${runFile}`, data.stdout, data.stderr].filter(Boolean).join('\n');
-      out.textContent += (out.textContent ? '\n' : '') + text + '\n';
-      out.scrollTop = out.scrollHeight;
-    }
-
-    async function ideRunActiveFile() {
-      if (!ideActivePath) return;
-      await ideSaveActive();
-      ideRunTerminal(null, ideActivePath);
-    }
-
-    function ideSwitchRight(which) {
-      document.getElementById('ideAiPane').style.display = which === 'ai' ? 'flex' : 'none';
-      document.getElementById('idePreviewPane').style.display = which === 'preview' ? 'flex' : 'none';
-      document.getElementById('ideRightAiBtn').style.background = which === 'ai' ? '#094771' : '';
-      document.getElementById('ideRightPrevBtn').style.background = which === 'preview' ? '#094771' : '';
-    }
-
-    async function ideAiAssist(preset = null, includeErr = false) {
-      const inp = document.getElementById('ideAiPrompt');
-      const prompt = preset || inp.value.trim();
-      if (!prompt) return;
-      if (!preset) inp.value = '';
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      const out = document.getElementById('ideAiOutput');
-      out.textContent = '⏳ Antigravity AI is thinking...';
-      const res = await fetch('/api/ide/ai_assist', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          prompt,
-          filename: cur ? cur.name : 'untitled',
-          code: cur ? cur.content : '',
-          error: includeErr ? ideLastError : ''
-        })
-      });
-      const data = await res.json();
-      out.textContent = data.reply || 'No response.';
-      const m = (data.reply || '').match(/```[\w]*\n([\s\S]*?)```/);
-      if (m) {
-        ideLastAiCode = m[1];
-        document.getElementById('ideApplyBtn').style.display = 'block';
-      } else {
-        document.getElementById('ideApplyBtn').style.display = 'none';
-      }
-    }
-
-    function ideApplyCode() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (!cur || !ideLastAiCode) return;
-      cur.content = ideLastAiCode;
-      cur.dirty = true;
-      ideRenderTabs();
-    }
-
-    renderHistory();
+      box.innerHTML = welcomeMarkup();
+      renderHistory();
+      const sc = document.getElementById('chatScroll');
+      if (sc) sc.scrollTop = 0;
       promptInput.focus();
     }
 
@@ -1757,140 +2125,6 @@ HTML_UI = r"""<!DOCTYPE html>
       }
 
 
-    function ideRenderTabs() {
-      const bar = document.getElementById('ideTabs');
-      bar.innerHTML = '';
-      ideOpenTabs.forEach(t => {
-        const tab = document.createElement('div');
-        const active = t.path === ideActivePath;
-        tab.style.cssText = `padding:6px 10px;font-size:0.78rem;cursor:pointer;display:flex;align-items:center;gap:6px;border-right:1px solid #2d2d2d;background:${active ? '#1e1e1e' : '#2d2d2d'};color:${active ? '#fff' : '#9cdcfe'};`;
-        tab.onclick = () => { ideActivePath = t.path; ideRenderTabs(); };
-        tab.innerHTML = `<span>${t.dirty ? '● ' : ''}${t.name}</span><span onclick="event.stopPropagation();ideCloseTab('${t.path.replace(/\\/g, '\\\\')}')" style="color:#858585;">×</span>`;
-        bar.appendChild(tab);
-      });
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      const ed = document.getElementById('ideEditor');
-      ed.value = cur ? cur.content : '';
-      document.getElementById('ideActivePath').textContent = cur ? cur.path : 'No file open';
-      ideUpdateLineNums();
-      if (cur && cur.name.toLowerCase().endsWith('.html')) {
-        document.getElementById('idePreviewFrame').srcdoc = cur.content;
-      }
-    }
-
-    function ideCloseTab(path) {
-      ideOpenTabs = ideOpenTabs.filter(t => t.path !== path);
-      if (ideActivePath === path) ideActivePath = ideOpenTabs.length ? ideOpenTabs[0].path : null;
-      ideRenderTabs();
-    }
-
-    function ideOnEdit() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (cur) {
-        cur.content = document.getElementById('ideEditor').value;
-        cur.dirty = true;
-        ideRenderTabs();
-      }
-      ideUpdateLineNums();
-    }
-
-    function ideUpdateLineNums() {
-      const lines = document.getElementById('ideEditor').value.split('\n').length;
-      document.getElementById('ideLineNums').textContent = Array.from({length: lines}, (_, i) => i + 1).join('\n');
-    }
-
-    function ideUpdateCursor() {
-      const ed = document.getElementById('ideEditor');
-      const upTo = ed.value.substring(0, ed.selectionStart).split('\n');
-      document.getElementById('ideCursorPos').textContent = `Ln ${upTo.length}, Col ${upTo[upTo.length - 1].length + 1}`;
-    }
-
-    async function ideSaveActive() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (!cur) return;
-      const res = await fetch('/api/ide/files', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action:'save', path: cur.path, content: cur.content }) });
-      const data = await res.json();
-      if (data.ok) { cur.dirty = false; ideRenderTabs(); }
-    }
-
-    function ideTermKey(e) {
-      const inp = document.getElementById('ideTermInput');
-      if (e.key === 'Enter') {
-        const cmd = inp.value.trim();
-        if (!cmd) return;
-        ideTermHistory.push(cmd);
-        ideTermHistIdx = ideTermHistory.length;
-        inp.value = '';
-        ideRunTerminal(cmd);
-      } else if (e.key === 'ArrowUp' && ideTermHistIdx > 0) {
-        ideTermHistIdx--;
-        inp.value = ideTermHistory[ideTermHistIdx];
-      } else if (e.key === 'ArrowDown' && ideTermHistIdx < ideTermHistory.length - 1) {
-        ideTermHistIdx++;
-        inp.value = ideTermHistory[ideTermHistIdx];
-      }
-    }
-
-    async function ideRunTerminal(cmd = null, runFile = null) {
-      const out = document.getElementById('ideTermOut');
-      const res = await fetch('/api/ide/terminal', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ cmd, run_file: runFile }) });
-      const data = await res.json();
-      document.getElementById('ideTermCwd').textContent = data.cwd || '';
-      if (data.stderr) ideLastError = data.stderr;
-      const text = [cmd ? `PS> ${cmd}` : `▶ Running ${runFile}`, data.stdout, data.stderr].filter(Boolean).join('\n');
-      out.textContent += (out.textContent ? '\n' : '') + text + '\n';
-      out.scrollTop = out.scrollHeight;
-    }
-
-    async function ideRunActiveFile() {
-      if (!ideActivePath) return;
-      await ideSaveActive();
-      ideRunTerminal(null, ideActivePath);
-    }
-
-    function ideSwitchRight(which) {
-      document.getElementById('ideAiPane').style.display = which === 'ai' ? 'flex' : 'none';
-      document.getElementById('idePreviewPane').style.display = which === 'preview' ? 'flex' : 'none';
-      document.getElementById('ideRightAiBtn').style.background = which === 'ai' ? '#094771' : '';
-      document.getElementById('ideRightPrevBtn').style.background = which === 'preview' ? '#094771' : '';
-    }
-
-    async function ideAiAssist(preset = null, includeErr = false) {
-      const inp = document.getElementById('ideAiPrompt');
-      const prompt = preset || inp.value.trim();
-      if (!prompt) return;
-      if (!preset) inp.value = '';
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      const out = document.getElementById('ideAiOutput');
-      out.textContent = '⏳ Antigravity AI is thinking...';
-      const res = await fetch('/api/ide/ai_assist', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          prompt,
-          filename: cur ? cur.name : 'untitled',
-          code: cur ? cur.content : '',
-          error: includeErr ? ideLastError : ''
-        })
-      });
-      const data = await res.json();
-      out.textContent = data.reply || 'No response.';
-      const m = (data.reply || '').match(/```[\w]*\n([\s\S]*?)```/);
-      if (m) {
-        ideLastAiCode = m[1];
-        document.getElementById('ideApplyBtn').style.display = 'block';
-      } else {
-        document.getElementById('ideApplyBtn').style.display = 'none';
-      }
-    }
-
-    function ideApplyCode() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (!cur || !ideLastAiCode) return;
-      cur.content = ideLastAiCode;
-      cur.dirty = true;
-      ideRenderTabs();
-    }
 
     renderHistory();
     }
@@ -1913,140 +2147,6 @@ HTML_UI = r"""<!DOCTYPE html>
       localStorage.setItem('argon_chats', JSON.stringify(chats));
 
 
-    function ideRenderTabs() {
-      const bar = document.getElementById('ideTabs');
-      bar.innerHTML = '';
-      ideOpenTabs.forEach(t => {
-        const tab = document.createElement('div');
-        const active = t.path === ideActivePath;
-        tab.style.cssText = `padding:6px 10px;font-size:0.78rem;cursor:pointer;display:flex;align-items:center;gap:6px;border-right:1px solid #2d2d2d;background:${active ? '#1e1e1e' : '#2d2d2d'};color:${active ? '#fff' : '#9cdcfe'};`;
-        tab.onclick = () => { ideActivePath = t.path; ideRenderTabs(); };
-        tab.innerHTML = `<span>${t.dirty ? '● ' : ''}${t.name}</span><span onclick="event.stopPropagation();ideCloseTab('${t.path.replace(/\\/g, '\\\\')}')" style="color:#858585;">×</span>`;
-        bar.appendChild(tab);
-      });
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      const ed = document.getElementById('ideEditor');
-      ed.value = cur ? cur.content : '';
-      document.getElementById('ideActivePath').textContent = cur ? cur.path : 'No file open';
-      ideUpdateLineNums();
-      if (cur && cur.name.toLowerCase().endsWith('.html')) {
-        document.getElementById('idePreviewFrame').srcdoc = cur.content;
-      }
-    }
-
-    function ideCloseTab(path) {
-      ideOpenTabs = ideOpenTabs.filter(t => t.path !== path);
-      if (ideActivePath === path) ideActivePath = ideOpenTabs.length ? ideOpenTabs[0].path : null;
-      ideRenderTabs();
-    }
-
-    function ideOnEdit() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (cur) {
-        cur.content = document.getElementById('ideEditor').value;
-        cur.dirty = true;
-        ideRenderTabs();
-      }
-      ideUpdateLineNums();
-    }
-
-    function ideUpdateLineNums() {
-      const lines = document.getElementById('ideEditor').value.split('\n').length;
-      document.getElementById('ideLineNums').textContent = Array.from({length: lines}, (_, i) => i + 1).join('\n');
-    }
-
-    function ideUpdateCursor() {
-      const ed = document.getElementById('ideEditor');
-      const upTo = ed.value.substring(0, ed.selectionStart).split('\n');
-      document.getElementById('ideCursorPos').textContent = `Ln ${upTo.length}, Col ${upTo[upTo.length - 1].length + 1}`;
-    }
-
-    async function ideSaveActive() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (!cur) return;
-      const res = await fetch('/api/ide/files', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action:'save', path: cur.path, content: cur.content }) });
-      const data = await res.json();
-      if (data.ok) { cur.dirty = false; ideRenderTabs(); }
-    }
-
-    function ideTermKey(e) {
-      const inp = document.getElementById('ideTermInput');
-      if (e.key === 'Enter') {
-        const cmd = inp.value.trim();
-        if (!cmd) return;
-        ideTermHistory.push(cmd);
-        ideTermHistIdx = ideTermHistory.length;
-        inp.value = '';
-        ideRunTerminal(cmd);
-      } else if (e.key === 'ArrowUp' && ideTermHistIdx > 0) {
-        ideTermHistIdx--;
-        inp.value = ideTermHistory[ideTermHistIdx];
-      } else if (e.key === 'ArrowDown' && ideTermHistIdx < ideTermHistory.length - 1) {
-        ideTermHistIdx++;
-        inp.value = ideTermHistory[ideTermHistIdx];
-      }
-    }
-
-    async function ideRunTerminal(cmd = null, runFile = null) {
-      const out = document.getElementById('ideTermOut');
-      const res = await fetch('/api/ide/terminal', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ cmd, run_file: runFile }) });
-      const data = await res.json();
-      document.getElementById('ideTermCwd').textContent = data.cwd || '';
-      if (data.stderr) ideLastError = data.stderr;
-      const text = [cmd ? `PS> ${cmd}` : `▶ Running ${runFile}`, data.stdout, data.stderr].filter(Boolean).join('\n');
-      out.textContent += (out.textContent ? '\n' : '') + text + '\n';
-      out.scrollTop = out.scrollHeight;
-    }
-
-    async function ideRunActiveFile() {
-      if (!ideActivePath) return;
-      await ideSaveActive();
-      ideRunTerminal(null, ideActivePath);
-    }
-
-    function ideSwitchRight(which) {
-      document.getElementById('ideAiPane').style.display = which === 'ai' ? 'flex' : 'none';
-      document.getElementById('idePreviewPane').style.display = which === 'preview' ? 'flex' : 'none';
-      document.getElementById('ideRightAiBtn').style.background = which === 'ai' ? '#094771' : '';
-      document.getElementById('ideRightPrevBtn').style.background = which === 'preview' ? '#094771' : '';
-    }
-
-    async function ideAiAssist(preset = null, includeErr = false) {
-      const inp = document.getElementById('ideAiPrompt');
-      const prompt = preset || inp.value.trim();
-      if (!prompt) return;
-      if (!preset) inp.value = '';
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      const out = document.getElementById('ideAiOutput');
-      out.textContent = '⏳ Antigravity AI is thinking...';
-      const res = await fetch('/api/ide/ai_assist', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          prompt,
-          filename: cur ? cur.name : 'untitled',
-          code: cur ? cur.content : '',
-          error: includeErr ? ideLastError : ''
-        })
-      });
-      const data = await res.json();
-      out.textContent = data.reply || 'No response.';
-      const m = (data.reply || '').match(/```[\w]*\n([\s\S]*?)```/);
-      if (m) {
-        ideLastAiCode = m[1];
-        document.getElementById('ideApplyBtn').style.display = 'block';
-      } else {
-        document.getElementById('ideApplyBtn').style.display = 'none';
-      }
-    }
-
-    function ideApplyCode() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (!cur || !ideLastAiCode) return;
-      cur.content = ideLastAiCode;
-      cur.dirty = true;
-      ideRenderTabs();
-    }
 
     renderHistory();
       return chat.messages.length - 1;
@@ -2428,12 +2528,20 @@ HTML_UI = r"""<!DOCTYPE html>
       const copyBtn = document.createElement('button');
       copyBtn.className = 'copy-btn';
       copyBtn.textContent = '📋 Copy';
+      copyBtn.title = 'Copy this reply';
       copyBtn.onclick = () => {
-        navigator.clipboard.writeText(text);
+        copyToClipboard(text, 'Reply copied');
         copyBtn.textContent = '✓ Copied';
-        setTimeout(() => copyBtn.textContent = '📋 Copy', 1500);
+        setTimeout(() => copyBtn.textContent = '📋 Copy', 1400);
       };
       footer.appendChild(copyBtn);
+
+      const retryBtn = document.createElement('button');
+      retryBtn.className = 'msg-action-btn';
+      retryBtn.textContent = '↻ Regenerate';
+      retryBtn.title = 'Ask again for a fresh answer';
+      retryBtn.onclick = () => regenerateAnswer();
+      footer.appendChild(retryBtn);
 
       if (idx !== null) {
         const branchBtn = document.createElement('button');
@@ -2474,9 +2582,12 @@ HTML_UI = r"""<!DOCTYPE html>
       scrollToBottom();
     }
 
-    function scrollToBottom() {
+    function scrollToBottom(force = true) {
       const sc = document.getElementById('chatScroll');
+      if (!sc) return;
+      if (!force && !isNearBottom()) { updateScrollFab(); return; }
       sc.scrollTop = sc.scrollHeight;
+      updateScrollFab();
     }
 
     async function fetchTelemetry() {
@@ -2524,6 +2635,8 @@ HTML_UI = r"""<!DOCTYPE html>
               : `🟡 <b>FLUX.1-schnell Pure ROM:</b> Missing files in <code>models/flux/</code> (using <code>sd_turbo_q8_0.gguf</code>). <button class="btn" style="margin-left:8px;padding:4px 10px;font-size:11px;background:#6366f1;" onclick="downloadFluxRom()">⬇️ Download flux1-schnell-Q4_K_S.gguf to SSD ROM</button> <span id="fluxDlProg" style="margin-left:8px;font-size:11px;color:#93c5fd;"></span>`;
           }
         }
+        applyEngineStatus(data);
+
         if (data.brains) {
           const bSel = document.getElementById('brainSelect');
           if (bSel) {
@@ -2596,13 +2709,6 @@ HTML_UI = r"""<!DOCTYPE html>
       } finally {
         btn.textContent = prevText;
         event.target.value = '';
-        if (window.innerWidth <= 768) {
-      const sb = document.getElementById('sidebar');
-      const openBtn = document.getElementById('openSidebarBtn');
-      if (sb) sb.classList.add('collapsed');
-      if (openBtn) openBtn.style.display = 'flex';
-    }
-    fetchTelemetry();
       }
     }
 
@@ -2618,19 +2724,21 @@ HTML_UI = r"""<!DOCTYPE html>
     async function toggleQuantumMode() {
       quantumModeEnabled = !quantumModeEnabled;
       const qBtn = document.getElementById('quantumToggleBtn');
-      if (qBtn) qBtn.textContent = quantumModeEnabled ? '⚛️ Quantum Mode: ON' : '⚛️ Quantum Mode: OFF';
-      await fetch('/api/quantum/toggle', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ enabled: quantumModeEnabled })
-      });
-      if (window.innerWidth <= 768) {
-      const sb = document.getElementById('sidebar');
-      const openBtn = document.getElementById('openSidebarBtn');
-      if (sb) sb.classList.add('collapsed');
-      if (openBtn) openBtn.style.display = 'flex';
-    }
-    fetchTelemetry();
+      if (qBtn) {
+        qBtn.classList.toggle('active', quantumModeEnabled);
+        qBtn.textContent = quantumModeEnabled ? '⚛️ Quantum ON' : '⚛️ Quantum';
+        qBtn.title = quantumModeEnabled ? 'Quantum reasoning enabled' : 'Quantum reasoning disabled';
+      }
+      try {
+        await fetch('/api/quantum/toggle', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ enabled: quantumModeEnabled })
+        });
+        toast(quantumModeEnabled ? 'Quantum reasoning enabled' : 'Quantum reasoning disabled', 'info', 1600);
+      } catch (_) {
+        toast('Could not update quantum mode', 'err');
+      }
     }
 
     async function toggleOfflineMode() {
@@ -2650,13 +2758,6 @@ HTML_UI = r"""<!DOCTYPE html>
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode })
       });
-      if (window.innerWidth <= 768) {
-      const sb = document.getElementById('sidebar');
-      const openBtn = document.getElementById('openSidebarBtn');
-      if (sb) sb.classList.add('collapsed');
-      if (openBtn) openBtn.style.display = 'flex';
-    }
-    fetchTelemetry();
     }
 
     async function selectLanguage() {
@@ -2666,24 +2767,10 @@ HTML_UI = r"""<!DOCTYPE html>
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ language })
       });
-      if (window.innerWidth <= 768) {
-      const sb = document.getElementById('sidebar');
-      const openBtn = document.getElementById('openSidebarBtn');
-      if (sb) sb.classList.add('collapsed');
-      if (openBtn) openBtn.style.display = 'flex';
-    }
-    fetchTelemetry();
     }
 
     async function toggleHarvester() {
       await fetch(harvesterRunning ? '/api/harvester/pause' : '/api/harvester/start', { method: 'POST' });
-      if (window.innerWidth <= 768) {
-      const sb = document.getElementById('sidebar');
-      const openBtn = document.getElementById('openSidebarBtn');
-      if (sb) sb.classList.add('collapsed');
-      if (openBtn) openBtn.style.display = 'flex';
-    }
-    fetchTelemetry();
     }
 
     async function stopServer() {
@@ -2832,169 +2919,91 @@ HTML_UI = r"""<!DOCTYPE html>
       loadGallery();
     }
 
+    let activeStream = null;          // AbortController for the in-flight reply
+    let lastUserPrompt = '';
+    let isSending = false;
+
+    function setComposerBusy(busy) {
+      isSending = busy;
+      const btn = document.getElementById('sendBtn');
+      if (!btn) return;
+      btn.classList.toggle('stopping', busy);
+      btn.textContent = busy ? '■' : '↑';
+      btn.title = busy ? 'Stop generating (Esc)' : 'Send (Enter)';
+      btn.dataset.mode = busy ? 'stop' : 'send';
+    }
+
+    function stopStreaming() {
+      if (activeStream) {
+        try { activeStream.abort(); } catch (_) {}
+        activeStream = null;
+        toast('Generation stopped', 'info');
+      }
+      setComposerBusy(false);
+      const typing = document.getElementById('typingRow');
+      if (typing) typing.remove();
+    }
+
+    function composeStreamingRow() {
+      const box = document.getElementById('chatBox');
+      const row = document.createElement('div');
+      row.className = 'msg-row ai';
+      row.id = 'streamRow';
+      const avatar = document.createElement('div');
+      avatar.className = 'ai-avatar';
+      avatar.textContent = '✦';
+      const body = document.createElement('div');
+      body.className = 'msg-ai-body';
+      const textDiv = document.createElement('div');
+      textDiv.className = 'msg-ai-text';
+      textDiv.innerHTML = '<span class="typing-cursor">▌</span>';
+      const badgeDiv = document.createElement('div');
+      badgeDiv.className = 'msg-badge';
+      badgeDiv.textContent = '⚡ Streaming live…';
+      body.appendChild(textDiv);
+      body.appendChild(badgeDiv);
+      row.appendChild(avatar);
+      row.appendChild(body);
+      box.appendChild(row);
+      scrollToBottom();
+      return { row, textDiv, badgeDiv };
+    }
+
     async function sendMessage(e) {
-      e.preventDefault();
+      if (e && e.preventDefault) e.preventDefault();
+      if (isSending) { toast('Still generating — press Esc to stop.', 'info'); return; }
       const text = promptInput.value.trim();
-      if (!text) return;
+      if (!text) { promptInput.focus(); return; }
+
+      lastUserPrompt = text;
       promptInput.value = '';
+      updateComposerMeta();
       promptInput.style.height = 'auto';
+
+      const ws = document.getElementById('welcomeScreen');
+      if (ws) ws.remove();
 
       const userIdx = saveMessageToHistory('user', text);
       const originChatId = currentChatId;
       pendingChats.add(originChatId);
-
-
-    function ideRenderTabs() {
-      const bar = document.getElementById('ideTabs');
-      bar.innerHTML = '';
-      ideOpenTabs.forEach(t => {
-        const tab = document.createElement('div');
-        const active = t.path === ideActivePath;
-        tab.style.cssText = `padding:6px 10px;font-size:0.78rem;cursor:pointer;display:flex;align-items:center;gap:6px;border-right:1px solid #2d2d2d;background:${active ? '#1e1e1e' : '#2d2d2d'};color:${active ? '#fff' : '#9cdcfe'};`;
-        tab.onclick = () => { ideActivePath = t.path; ideRenderTabs(); };
-        tab.innerHTML = `<span>${t.dirty ? '● ' : ''}${t.name}</span><span onclick="event.stopPropagation();ideCloseTab('${t.path.replace(/\\/g, '\\\\')}')" style="color:#858585;">×</span>`;
-        bar.appendChild(tab);
-      });
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      const ed = document.getElementById('ideEditor');
-      ed.value = cur ? cur.content : '';
-      document.getElementById('ideActivePath').textContent = cur ? cur.path : 'No file open';
-      ideUpdateLineNums();
-      if (cur && cur.name.toLowerCase().endsWith('.html')) {
-        document.getElementById('idePreviewFrame').srcdoc = cur.content;
-      }
-    }
-
-    function ideCloseTab(path) {
-      ideOpenTabs = ideOpenTabs.filter(t => t.path !== path);
-      if (ideActivePath === path) ideActivePath = ideOpenTabs.length ? ideOpenTabs[0].path : null;
-      ideRenderTabs();
-    }
-
-    function ideOnEdit() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (cur) {
-        cur.content = document.getElementById('ideEditor').value;
-        cur.dirty = true;
-        ideRenderTabs();
-      }
-      ideUpdateLineNums();
-    }
-
-    function ideUpdateLineNums() {
-      const lines = document.getElementById('ideEditor').value.split('\n').length;
-      document.getElementById('ideLineNums').textContent = Array.from({length: lines}, (_, i) => i + 1).join('\n');
-    }
-
-    function ideUpdateCursor() {
-      const ed = document.getElementById('ideEditor');
-      const upTo = ed.value.substring(0, ed.selectionStart).split('\n');
-      document.getElementById('ideCursorPos').textContent = `Ln ${upTo.length}, Col ${upTo[upTo.length - 1].length + 1}`;
-    }
-
-    async function ideSaveActive() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (!cur) return;
-      const res = await fetch('/api/ide/files', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action:'save', path: cur.path, content: cur.content }) });
-      const data = await res.json();
-      if (data.ok) { cur.dirty = false; ideRenderTabs(); }
-    }
-
-    function ideTermKey(e) {
-      const inp = document.getElementById('ideTermInput');
-      if (e.key === 'Enter') {
-        const cmd = inp.value.trim();
-        if (!cmd) return;
-        ideTermHistory.push(cmd);
-        ideTermHistIdx = ideTermHistory.length;
-        inp.value = '';
-        ideRunTerminal(cmd);
-      } else if (e.key === 'ArrowUp' && ideTermHistIdx > 0) {
-        ideTermHistIdx--;
-        inp.value = ideTermHistory[ideTermHistIdx];
-      } else if (e.key === 'ArrowDown' && ideTermHistIdx < ideTermHistory.length - 1) {
-        ideTermHistIdx++;
-        inp.value = ideTermHistory[ideTermHistIdx];
-      }
-    }
-
-    async function ideRunTerminal(cmd = null, runFile = null) {
-      const out = document.getElementById('ideTermOut');
-      const res = await fetch('/api/ide/terminal', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ cmd, run_file: runFile }) });
-      const data = await res.json();
-      document.getElementById('ideTermCwd').textContent = data.cwd || '';
-      if (data.stderr) ideLastError = data.stderr;
-      const text = [cmd ? `PS> ${cmd}` : `▶ Running ${runFile}`, data.stdout, data.stderr].filter(Boolean).join('\n');
-      out.textContent += (out.textContent ? '\n' : '') + text + '\n';
-      out.scrollTop = out.scrollHeight;
-    }
-
-    async function ideRunActiveFile() {
-      if (!ideActivePath) return;
-      await ideSaveActive();
-      ideRunTerminal(null, ideActivePath);
-    }
-
-    function ideSwitchRight(which) {
-      document.getElementById('ideAiPane').style.display = which === 'ai' ? 'flex' : 'none';
-      document.getElementById('idePreviewPane').style.display = which === 'preview' ? 'flex' : 'none';
-      document.getElementById('ideRightAiBtn').style.background = which === 'ai' ? '#094771' : '';
-      document.getElementById('ideRightPrevBtn').style.background = which === 'preview' ? '#094771' : '';
-    }
-
-    async function ideAiAssist(preset = null, includeErr = false) {
-      const inp = document.getElementById('ideAiPrompt');
-      const prompt = preset || inp.value.trim();
-      if (!prompt) return;
-      if (!preset) inp.value = '';
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      const out = document.getElementById('ideAiOutput');
-      out.textContent = '⏳ Antigravity AI is thinking...';
-      const res = await fetch('/api/ide/ai_assist', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          prompt,
-          filename: cur ? cur.name : 'untitled',
-          code: cur ? cur.content : '',
-          error: includeErr ? ideLastError : ''
-        })
-      });
-      const data = await res.json();
-      out.textContent = data.reply || 'No response.';
-      const m = (data.reply || '').match(/```[\w]*\n([\s\S]*?)```/);
-      if (m) {
-        ideLastAiCode = m[1];
-        document.getElementById('ideApplyBtn').style.display = 'block';
-      } else {
-        document.getElementById('ideApplyBtn').style.display = 'none';
-      }
-    }
-
-    function ideApplyCode() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (!cur || !ideLastAiCode) return;
-      cur.content = ideLastAiCode;
-      cur.dirty = true;
-      ideRenderTabs();
-    }
-
-    renderHistory();
+      renderHistory();
       appendUserMessage(text, userIdx);
       appendTypingIndicator();
+      setComposerBusy(true);
+
+      const lang = document.getElementById('langSelect') ? document.getElementById('langSelect').value : 'auto';
 
       try {
-        const lang = document.getElementById('langSelect') ? document.getElementById('langSelect').value : 'auto';
+        /* ---------------- image generation mode ---------------- */
         if (imageMode && !hasCodingIntent(text)) {
           const res = await fetch('/api/image', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json' },
             body: JSON.stringify({ prompt: text, language: lang, quantum_mode: quantumModeEnabled })
           });
-          const data = await res.json();
-          pendingChats.delete(originChatId);
+          const data = await readJsonSafe(res);
           const replyText = data.reply ?? data.answer ?? (data.error ? `⚠️ ${data.error}` : 'No response received.');
-          const badge = data.badge || `⚡ ${data.latency_ms}ms • ${data.source} • 100% Offline`;
+          const badge = data.badge || `⚡ ${data.latency_ms ?? 0}ms • ${data.source || 'local'} • 100% Offline`;
           const imgUrl = data.image_url || null;
           const aiIdx = saveMessageToHistory('ai', replyText, badge, imgUrl, originChatId);
           if (currentChatId === originChatId) {
@@ -3003,47 +3012,45 @@ HTML_UI = r"""<!DOCTYPE html>
             appendAiMessage(replyText, badge, aiIdx, imgUrl);
           }
           if (imgUrl) loadGallery();
-          if (window.innerWidth <= 768) {
-      const sb = document.getElementById('sidebar');
-      const openBtn = document.getElementById('openSidebarBtn');
-      if (sb) sb.classList.add('collapsed');
-      if (openBtn) openBtn.style.display = 'flex';
-    }
-    fetchTelemetry();
           return;
         }
 
+        /* ---------------- normal streaming chat ---------------- */
         const typing = document.getElementById('typingRow');
         if (typing) typing.remove();
 
-        const box = document.getElementById('chatBox');
-        const row = document.createElement('div');
-        row.className = 'msg-row ai';
-        const avatar = document.createElement('div');
-        avatar.className = 'ai-avatar';
-        avatar.textContent = 'A';
-        const body = document.createElement('div');
-        body.className = 'msg-ai-body';
-        const textDiv = document.createElement('div');
-        textDiv.className = 'msg-ai-text';
-        textDiv.innerHTML = '<span class="typing-cursor">▌</span>';
-        const badgeDiv = document.createElement('div');
-        badgeDiv.className = 'msg-badge';
-        badgeDiv.textContent = '⚡ Streaming live...';
-        body.appendChild(textDiv);
-        body.appendChild(badgeDiv);
-        row.appendChild(avatar);
-        row.appendChild(body);
-        box.appendChild(row);
-        scrollToBottom();
+        const { row: streamRow, textDiv, badgeDiv } = composeStreamingRow();
+        const controller = new AbortController();
+        activeStream = controller;
 
         const selectedModel = document.getElementById('brainSelect') ? document.getElementById('brainSelect').value : 'auto';
         const thinkingLevel = document.getElementById('thinkingLevelSelect') ? document.getElementById('thinkingLevelSelect').value : 'mid';
         const res = await fetch('/api/chat/stream', {
           method: 'POST',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ prompt: text, language: lang, model: selectedModel, thinking_level: thinkingLevel, quantum_mode: quantumModeEnabled, swarm_enabled: swarmModeEnabled })
+          signal: controller.signal,
+          body: JSON.stringify({
+            prompt: text,
+            language: lang,
+            model: selectedModel,
+            thinking_level: thinkingLevel,
+            quantum_mode: quantumModeEnabled,
+            swarm_enabled: swarmModeEnabled
+          })
         });
+
+        if (!res.ok || !res.body) {
+          const detail = await readJsonSafe(res);
+          const why = detail.error || `HTTP ${res.status}`;
+          streamRow.remove();
+          toast(`Server rejected the request (${why})`, 'err');
+          const msg = `⚠️ The local server refused this request: **${why}**. ` +
+            (res.status === 403 ? 'The host/origin guard blocked it — reload the page or see the console for the allowed hosts.' : 'Check the server log for details.');
+          const idx = saveMessageToHistory('ai', msg, 'Error', null, originChatId);
+          if (currentChatId === originChatId) appendAiMessage(msg, 'Error', idx);
+          return;
+        }
+
         const reader = res.body.getReader();
         const decoder = new TextDecoder();
         let buffer = '';
@@ -3058,39 +3065,82 @@ HTML_UI = r"""<!DOCTYPE html>
           buffer = lines.pop();
           for (const line of lines) {
             if (!line.startsWith('data: ')) continue;
-            const ev = JSON.parse(line.slice(6));
+            let ev;
+            try { ev = JSON.parse(line.slice(6)); } catch (_) { continue; }
             if (ev.type === 'token') {
-              fullText += ev.token;
+              fullText += ev.token || '';
               textDiv.innerHTML = formatText(fullText) + '<span class="typing-cursor">▌</span>';
-              scrollToBottom();
+              if (isNearBottom()) scrollToBottom();
             } else if (ev.type === 'done') {
               fullText = ev.reply || fullText;
               finalBadge = ev.badge || '';
+            } else if (ev.type === 'error') {
+              finalBadge = 'Error';
+              fullText += `\n\n⚠️ ${ev.error || 'Generation failed.'}`;
             }
           }
         }
-        pendingChats.delete(originChatId);
-        textDiv.innerHTML = formatText(fullText || 'No response received.');
-        autoRunChatCodeBlocks(textDiv);
-        badgeDiv.textContent = finalBadge;
-        saveMessageToHistory('ai', fullText, finalBadge, null, originChatId);
-        if (window.innerWidth <= 768) {
-      const sb = document.getElementById('sidebar');
-      const openBtn = document.getElementById('openSidebarBtn');
-      if (sb) sb.classList.add('collapsed');
-      if (openBtn) openBtn.style.display = 'flex';
-    }
-    fetchTelemetry();
+
+        streamRow.remove();
+        const reply = fullText.trim() || 'No response received.';
+        const aiIdx = saveMessageToHistory('ai', reply, finalBadge, null, originChatId);
+        if (currentChatId === originChatId) appendAiMessage(reply, finalBadge, aiIdx);
       } catch (err) {
-        pendingChats.delete(originChatId);
-        const errIdx = saveMessageToHistory('ai', 'Error communicating with local ARGON-OMEGA server.', 'Error', null, originChatId);
-        if (currentChatId === originChatId) {
-          const typing = document.getElementById('typingRow');
-          if (typing) typing.remove();
-          appendAiMessage('Error communicating with local ARGON-OMEGA server.', 'Error', errIdx);
+        const typing = document.getElementById('typingRow');
+        if (typing) typing.remove();
+        const streamRow = document.getElementById('streamRow');
+
+        if (err && err.name === 'AbortError') {
+          if (streamRow) streamRow.remove();
+          saveMessageToHistory('ai', '⏹ Generation stopped by you.', 'Stopped', null, originChatId);
+          const chat = chats.find(c => c.id === originChatId);
+          if (chat && currentChatId === originChatId) {
+            const box = document.getElementById('chatBox');
+            const note = document.createElement('div');
+            note.className = 'msg-row ai';
+            note.innerHTML = '<div class="ai-avatar">✦</div><div class="msg-ai-body"><div class="msg-ai-content" style="color:#93a4b8;">⏹ Generation stopped.</div></div>';
+            box.appendChild(note);
+            scrollToBottom();
+          }
+        } else {
+          if (streamRow) streamRow.remove();
+          const msg = `⚠️ Could not reach the local ARGON-OMEGA server. ${err && err.message ? '(' + err.message + ')' : ''}`;
+          toast('Connection to the local server failed', 'err');
+          const idx = saveMessageToHistory('ai', msg, 'Error', null, originChatId);
+          if (currentChatId === originChatId) appendAiMessage(msg, 'Error', idx);
         }
+      } finally {
+        activeStream = null;
+        pendingChats.delete(originChatId);
+        renderHistory();
+        setComposerBusy(false);
+        if (window.innerWidth <= 768) closeSidebarOnMobile();
       }
     }
+
+    async function readJsonSafe(res) {
+      try {
+        const textBody = await res.text();
+        return textBody ? JSON.parse(textBody) : {};
+      } catch (_) {
+        return {};
+      }
+    }
+
+    async function regenerateAnswer() {
+      if (isSending) return;
+      let prompt = lastUserPrompt;
+      if (!prompt) {
+        const chat = chats.find(c => c.id === currentChatId);
+        const lastUser = chat && [...chat.messages].reverse().find(m => m.role === 'user');
+        prompt = lastUser ? lastUser.text : '';
+      }
+      if (!prompt) { toast('Nothing to regenerate yet', 'info'); return; }
+      promptInput.value = prompt;
+      updateComposerMeta();
+      await sendMessage();
+    }
+
 
     function loadSandboxTemplate(kind) {
       const ed = document.getElementById('sandboxEditor');
@@ -3273,22 +3323,51 @@ print("Primes < 50:", primes)`;
     async function runLaptopAudit() {
       const out = document.getElementById('auditOutput');
       out.textContent = 'Running offline laptop security audit...';
-      const res = await fetch('/api/security/audit', { method: 'POST' });
-      const data = await res.json();
-      out.textContent = data.report;
+      try {
+        const res = await fetch('/api/security/audit', { method: 'POST' });
+        const data = await readJsonSafe(res);
+        const analysis = data.ai_analysis || data.report || 'No analysis returned.';
+        out.textContent = `— ANALYSIS (${data.model || 'static'}) —\n${analysis}\n\n` +
+          `— RAW DIAGNOSTICS —\n${data.raw_report || ''}`;
+        toast('Device audit finished', 'ok');
+      } catch (err) {
+        out.textContent = `Audit failed: ${err.message}`;
+        toast('Audit failed', 'err');
+      }
     }
 
     async function scanCode() {
       const code = document.getElementById('codeInput').value;
       const out = document.getElementById('sastOutput');
+      if (!code.trim()) { toast('Paste some code first', 'info'); return; }
       out.textContent = 'Scanning code offline...';
-      const res = await fetch('/api/security/sast', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
-      });
-      const data = await res.json();
-      out.textContent = data.report;
+      try {
+        const res = await fetch('/api/security/sast', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ code })
+        });
+        const data = await readJsonSafe(res);
+        const findings = data.findings || [];
+        if (!findings.length) {
+          out.textContent = '✅ No issues matched the offline ruleset.\n\n' +
+            (data.neural_review || data.static_summary || '');
+          toast('Scan finished — no findings', 'ok');
+          return;
+        }
+        const order = { CRITICAL: 0, HIGH: 1, MEDIUM: 2, LOW: 3 };
+        const sorted = [...findings].sort((a, b) => (order[a.severity] ?? 9) - (order[b.severity] ?? 9));
+        out.textContent =
+          `⚠️ ${findings.length} finding(s) — worst first\n\n` +
+          sorted.map(f =>
+            `[${f.severity}] line ${f.line} · ${f.type}\n    ${f.code}\n    fix: ${f.fix}`
+          ).join('\n\n');
+        const critical = findings.filter(f => f.severity === 'CRITICAL').length;
+        toast(`${findings.length} finding(s)${critical ? ` · ${critical} critical` : ''}`, critical ? 'err' : 'info');
+      } catch (err) {
+        out.textContent = `Scan failed: ${err.message}`;
+        toast('SAST scan failed', 'err');
+      }
     }
 
     async function patchCode() {
@@ -3300,8 +3379,18 @@ print("Primes < 50:", primes)`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ code })
       });
-      const data = await res.json();
-      out.textContent = `--- PATCHES APPLIED ---\n${data.notes.join('\n')}\n\n--- PATCHED CODE ---\n${data.patched_code}`;
+      const data = await readJsonSafe(res);
+      const patched = data.patched_code || '';
+      if (!patched) {
+        out.textContent = 'No patch produced. A local GGUF model is required for AI auto-patching;\n' +
+          'the rules engine still reports findings in the scan above.';
+        toast('Auto-patch needs a local model', 'info');
+        return;
+      }
+      out.textContent =
+        `--- AUTO-PATCH (${data.model || 'local model'}) ---\n\n${patched}`;
+      document.getElementById('codeInput').value = patched;
+      toast('Patched code written into the editor', 'ok');
     }
 
     async function searchCVE() {
@@ -3314,8 +3403,18 @@ print("Primes < 50:", primes)`;
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ query })
       });
-      const data = await res.json();
-      out.textContent = data.results;
+      const data = await readJsonSafe(res);
+      const hits = data.results || [];
+      if (!hits.length) {
+        out.textContent = 'No vault matches. Try “sql injection”, “xss”, “cve-2021”, or download the datasets first.';
+        return;
+      }
+      out.textContent = hits.map((hit, i) => {
+        if (typeof hit === 'string') return `${i + 1}. ${hit}`;
+        const title = hit.question || hit.title || hit.cve || hit.id || 'match';
+        const body = hit.answer || hit.description || hit.summary || '';
+        return `${i + 1}. ${title}\n   ${String(body).slice(0, 300)}`;
+      }).join('\n\n');
     }
 
     async function downloadCVE() {
@@ -3324,13 +3423,6 @@ print("Primes < 50:", primes)`;
       const res = await fetch('/api/security/cve_download', { method: 'POST' });
       const data = await res.json();
       out.textContent = `Downloaded & indexed ${data.inserted} security/CVE records into SSD ROM.`;
-      if (window.innerWidth <= 768) {
-      const sb = document.getElementById('sidebar');
-      const openBtn = document.getElementById('openSidebarBtn');
-      if (sb) sb.classList.add('collapsed');
-      if (openBtn) openBtn.style.display = 'flex';
-    }
-    fetchTelemetry();
     }
 
 
@@ -3847,14 +3939,8 @@ print("Primes < 50:", primes)`;
     }
 
     renderHistory();
-    if (window.innerWidth <= 768) {
-      const sb = document.getElementById('sidebar');
-      const openBtn = document.getElementById('openSidebarBtn');
-      if (sb) sb.classList.add('collapsed');
-      if (openBtn) openBtn.style.display = 'flex';
-    }
-    fetchTelemetry();
     setInterval(fetchTelemetry, 2000);
+    initUiExtras();
   async function downloadFluxRom() {
     const el = document.getElementById('fluxDlProg');
     if (el) el.textContent = 'Starting download...';
@@ -3871,11 +3957,313 @@ print("Primes < 50:", primes)`;
         }
         if (!dl.downloading) {
           clearInterval(timer);
-          if (dl.ready && typeof loadStatus === 'function') loadStatus();
+          if (dl.ready) fetchTelemetry();
         }
       } catch (e) { clearInterval(timer); }
     }, 1500);
   }
+
+    /* ==================================================================
+       ARGON v2 UX helpers: toasts, search, shortcuts, engine status
+       ================================================================== */
+    const WELCOME_HTML = `
+      <div class="welcome-screen" id="welcomeScreen">
+        <div class="welcome-orb">✦</div>
+        <div class="welcome-title">What can I help with?</div>
+        <div class="welcome-sub">100% offline AI powered by your local SSD ROM &amp; llama-server.</div>
+        <div class="welcome-badge" id="welcomeBadge">⚡ Local engine ready</div>
+        <div class="suggestion-grid">
+          <button class="suggestion-chip" data-icon="🧠" onclick="useSuggestion('Explain how mmap works in llama-server')">
+            <span><strong>Explain mmap</strong><span>How local model memory mapping works</span></span>
+          </button>
+          <button class="suggestion-chip" data-icon="🐍" onclick="useSuggestion('Write a Python script to scan a directory for large files')">
+            <span><strong>Write a Python script</strong><span>Scan a directory for large files</span></span>
+          </button>
+          <button class="suggestion-chip" data-icon="💾" onclick="useSuggestion('Remember that my favorite language is Python')">
+            <span><strong>Save to memory</strong><span>Store a personal fact in SSD ROM</span></span>
+          </button>
+          <button class="suggestion-chip" data-icon="🛡️" onclick="useSuggestion('What are common SQL injection vulnerabilities and how to fix them?')">
+            <span><strong>Security advice</strong><span>SQL injection patterns &amp; fixes</span></span>
+          </button>
+        </div>
+      </div>`;
+    function welcomeMarkup() { return WELCOME_HTML; }
+    function toast(message, kind = 'info', ms = 3200) {
+      const host = document.getElementById('toastHost');
+      if (!host) return;
+      const el = document.createElement('div');
+      el.className = `toast ${kind}`;
+      const icon = kind === 'ok' ? '✅' : kind === 'err' ? '⚠️' : 'ℹ️';
+      el.innerHTML = `<span class="ico">${icon}</span><span></span>`;
+      el.lastElementChild.textContent = message;
+      host.appendChild(el);
+      setTimeout(() => {
+        el.classList.add('leaving');
+        setTimeout(() => el.remove(), 220);
+      }, ms);
+    }
+    async function copyToClipboard(text, label = 'Copied to clipboard') {
+      try {
+        await navigator.clipboard.writeText(text);
+        toast(label, 'ok', 1600);
+      } catch (_) {
+        toast('Clipboard blocked by the browser', 'err');
+      }
+    }
+    function filterHistory(query) {
+      const q = String(query || '').trim().toLowerCase();
+      const list = document.getElementById('historyList');
+      if (!list) return;
+      list.querySelectorAll('.history-item').forEach(item => {
+        const title = (item.querySelector('.history-item-title')?.textContent || '').toLowerCase();
+        item.style.display = !q || title.includes(q) ? '' : 'none';
+      });
+      const anyVisible = [...list.querySelectorAll('.history-item')].some(el => el.style.display !== 'none');
+      let empty = list.querySelector('.history-empty');
+      if (!anyVisible && q) {
+        if (!empty) {
+          empty = document.createElement('div');
+          empty.className = 'history-empty';
+          list.appendChild(empty);
+        }
+        empty.textContent = `No chats match “${query}”.`;
+      } else if (empty) {
+        empty.remove();
+      }
+    }
+    function updateComposerMeta() {
+      const count = document.getElementById('charCount');
+      if (count) {
+        const n = promptInput.value.length;
+        count.textContent = n ? `${n}` : '0';
+        count.style.color = n > 4000 ? '#fca5a5' : '#6f8299';
+      }
+    }
+    function isNearBottom() {
+      const sc = document.getElementById('chatScroll');
+      if (!sc) return true;
+      return sc.scrollHeight - sc.scrollTop - sc.clientHeight < 140;
+    }
+    function updateScrollFab() {
+      const fab = document.getElementById('scrollFab');
+      if (!fab) return;
+      fab.classList.toggle('show', !isNearBottom());
+    }
+    function jumpToBottom() {
+      const sc = document.getElementById('chatScroll');
+      if (sc) sc.scrollTo({ top: sc.scrollHeight, behavior: 'smooth' });
+    }
+    function openModelHelp() { openModels(); }
+
+    /* ---------------- models panel ---------------- */
+    let modelsPoll = null;
+
+    function openModels() {
+      const modal = document.getElementById('modelsModal');
+      if (!modal) return;
+      modal.classList.add('open');
+      refreshModels();
+      if (modelsPoll) clearInterval(modelsPoll);
+      modelsPoll = setInterval(refreshModels, 2500);
+    }
+
+    function closeModels() {
+      const modal = document.getElementById('modelsModal');
+      if (modal) modal.classList.remove('open');
+      if (modelsPoll) { clearInterval(modelsPoll); modelsPoll = null; }
+    }
+
+    async function refreshModels() {
+      const list = document.getElementById('modelsList');
+      if (!list) return;
+      try {
+        const res = await fetch('/api/models/download/status');
+        const data = await readJsonSafe(res);
+        const models = data.models || {};
+        const names = Object.keys(models);
+        if (!names.length) {
+          list.innerHTML = '<div class="models-empty">The server returned no model catalog entries.</div>';
+          return;
+        }
+        const running = Boolean(data.running);
+        list.innerHTML = names.map(name => {
+          const st = models[name] || {};
+          const status = st.status || 'missing';
+          const pct = st.total_mb > 0 ? Math.min(100, Math.round((st.downloaded_mb / st.total_mb) * 100)) : 0;
+          const cls = status === 'ready' ? 'ready' : (status === 'downloading' || status === 'resolving') ? 'downloading' : 'missing';
+          const label = status === 'ready' ? '✅ installed'
+            : status === 'downloading' ? `⬇ downloading ${pct}%`
+            : status === 'resolving' ? '⚙ resolving…' : 'not installed';
+          const size = st.total_mb ? `${(st.total_mb / 1024).toFixed(2)} GB` : 'size unknown';
+          const busy = running || status === 'downloading' || status === 'resolving';
+          return `
+            <div class="model-row">
+              <div style="min-width:0;">
+                <div class="m-name">${name}</div>
+                <div class="m-meta">${size}${st.error ? ' · ⚠️ ' + st.error : ''}</div>
+              </div>
+              <div class="m-state">
+                <span class="state-pill ${cls}">${label}</span>
+                <button onclick="downloadModel('${name}', this)" ${status === 'ready' || busy ? 'disabled' : ''}>
+                  ${status === 'ready' ? 'installed' : '⬇ Download'}
+                </button>
+              </div>
+            </div>`;
+        }).join('');
+        const foot = document.getElementById('modelsFootNote');
+        if (foot && running) {
+          foot.textContent = 'Download in progress — this panel refreshes every couple of seconds.';
+        }
+      } catch (err) {
+        list.innerHTML = `<div class="models-empty">Could not read the model catalog (${err.message || 'network error'}).</div>`;
+      }
+    }
+
+    async function downloadModel(name, btn) {
+      if (btn) { btn.disabled = true; btn.textContent = 'starting…'; }
+      try {
+        const res = await fetch('/api/models/download', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ model: name })
+        });
+        const data = await readJsonSafe(res);
+        if (res.ok) {
+          toast(`Download started for ${name}`, 'ok');
+        } else {
+          toast(data.error || 'Download could not start', 'err');
+        }
+      } catch (err) {
+        toast(`Download failed: ${err.message}`, 'err');
+      }
+      refreshModels();
+    }
+
+    function downloadRecommendedModels() {
+      const wanted = ['gemma-3-1b-it-Q4_K_M.gguf', 'qwen2.5-coder-7b-instruct-q4_k_m.gguf'];
+      fetch('/api/models/download', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ models: wanted })
+      })
+        .then(r => r.json())
+        .then(() => { toast('Downloading the ~5.5 GB starter set', 'ok'); refreshModels(); })
+        .catch(err => toast(`Could not start download: ${err.message}`, 'err'));
+    }
+    function closeSidebarOnMobile() {
+      if (window.innerWidth > 820) return;
+      const sb = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      const openBtn = document.getElementById('openSidebarBtn');
+      if (sb) sb.classList.add('collapsed');
+      if (overlay) overlay.classList.remove('show');
+      if (openBtn) openBtn.style.display = 'flex';
+    }
+    function applyEngineStatus(data) {
+      const demo = data.demo_brain || {};
+      const models = data.models || {};
+      const chip = document.getElementById('demoChip');
+      const banner = document.getElementById('demoBanner');
+      const badge = document.getElementById('welcomeBadge');
+      const engineState = document.getElementById('engineState');
+      const engineDetail = document.getElementById('engineDetail');
+      const composerStatus = document.getElementById('composerStatus');
+      const demoActive = Boolean(demo.active);
+      if (chip) chip.style.display = demoActive ? 'inline-flex' : 'none';
+      if (banner) banner.style.display = demoActive ? 'flex' : 'none';
+      if (badge) {
+        badge.textContent = demoActive
+          ? '🧪 Demo Brain — replies are simulated locally'
+          : `⚡ ${models.count || 0} local brain(s) ready`;
+      }
+      if (engineState) {
+        engineState.textContent = demoActive ? '🧪 Demo (simulated)' : '🟢 Local GGUF';
+        engineState.style.color = demoActive ? '#fcd34d' : '#34d399';
+      }
+      if (engineDetail) {
+        engineDetail.textContent = demoActive
+          ? `No GGUF in models/? — install one for real answers · ${demo.speed_tokens_per_sec || 42} tok/s simulated`
+          : `${models.count || 0} model(s) installed in models/`;
+      }
+      if (composerStatus) {
+        composerStatus.textContent = demoActive
+          ? 'Demo Brain · simulated locally · 100% offline'
+          : '100% offline · local SSD ROM';
+      }
+      renderTerminalQuickCmds(data.platform || '');
+    }
+    function renderTerminalQuickCmds(platform) {
+      const host = document.getElementById('drawerQuickCmds');
+      if (!host) return;
+      const win = String(platform || navigator.platform || '').toLowerCase().includes('win');
+      const cmds = win
+        ? [['$ ipconfig', 'ipconfig'], ['$ netstat', 'netstat -ano'], ['$ tasklist', 'tasklist'], ['$ whoami', 'whoami']]
+        : [['$ ip a', 'ip addr'], ['$ ss -tulpn', 'ss -tulpn'], ['$ ps aux', 'ps aux'], ['$ whoami', 'whoami']];
+      host.innerHTML = cmds
+        .map(([label, cmd]) => `<button type="button" class="tool-btn" onclick="runDrawerCmd('terminal','${cmd.replace(/'/g, "\\'")}')">${label}</button>`)
+        .join('') +
+        `<button type="button" class="tool-btn" onclick="runDrawerCmd('python','print([x**2 for x in range(1, 11)])')">🧪 Test Python</button>`;
+    }
+    function initUiExtras() {
+      /* auto-grow + counter */
+      const ta = document.getElementById('promptInput');
+      if (ta) {
+        const grow = () => {
+          ta.style.height = 'auto';
+          ta.style.height = Math.min(ta.scrollHeight, 220) + 'px';
+          updateComposerMeta();
+        };
+        ta.addEventListener('input', grow);
+        grow();
+      }
+      /* send button doubles as stop while streaming */
+      const sendBtn = document.getElementById('sendBtn');
+      if (sendBtn) {
+        sendBtn.addEventListener('click', (ev) => {
+          if (sendBtn.dataset.mode === 'stop') {
+            ev.preventDefault();
+            stopStreaming();
+          }
+        });
+      }
+      /* scroll-to-bottom fab */
+      const sc = document.getElementById('chatScroll');
+      if (sc) sc.addEventListener('scroll', updateScrollFab, { passive: true });
+      /* keyboard shortcuts */
+      document.addEventListener('keydown', (e) => {
+        const meta = e.ctrlKey || e.metaKey;
+        if (meta && e.key.toLowerCase() === 'k') {
+          e.preventDefault();
+          promptInput.focus();
+          promptInput.select();
+        } else if (meta && e.key.toLowerCase() === 'b') {
+          e.preventDefault();
+          toggleSidebar();
+        } else if (meta && e.shiftKey && e.key.toLowerCase() === 'o') {
+          e.preventDefault();
+          newChat();
+        } else if (e.key === 'Escape' && isSending) {
+          stopStreaming();
+        } else if (meta && e.shiftKey && e.key.toLowerCase() === 'c' && lastUserPrompt) {
+          e.preventDefault();
+          copyToClipboard(lastUserPrompt, 'Prompt copied');
+        }
+      });
+      /* mobile drawer overlay */
+      if (window.innerWidth <= 820) {
+        const sb = document.getElementById('sidebar');
+        if (sb && !sb.classList.contains('collapsed')) {
+          document.getElementById('sidebarOverlay')?.classList.add('show');
+        }
+      }
+      updateComposerMeta();
+    }
+    window.addEventListener('resize', () => {
+      const overlay = document.getElementById('sidebarOverlay');
+      if (window.innerWidth > 820 && overlay) overlay.classList.remove('show');
+      updateScrollFab();
+    });
+
   </script>
 </body>
 </html>
@@ -3883,6 +4271,57 @@ print("Primes < 50:", primes)`;
 
 
 _FOLDER_SIZE_CACHE = {"ts": 0.0, "mb": 0.0, "gb": 0.0}
+_FOLDER_SIZE_LOCK = threading.Lock()
+
+
+def folder_size_mb(force: bool = False) -> float:
+    """Total size of ROM databases + model weights, cached for 30s."""
+    now = time.time()
+    with _FOLDER_SIZE_LOCK:
+        if not force and _FOLDER_SIZE_CACHE["ts"] and now - _FOLDER_SIZE_CACHE["ts"] < 30:
+            return _FOLDER_SIZE_CACHE["mb"]
+        total = 0
+        base = os.path.dirname(os.path.abspath(__file__))
+        for folder, _dirs, files in os.walk(base):
+            if os.sep + ".git" in folder or "__pycache__" in folder:
+                continue
+            for name in files:
+                if name.endswith((".db", ".gguf", ".part", ".safetensors")):
+                    try:
+                        total += os.path.getsize(os.path.join(folder, name))
+                    except OSError:
+                        pass
+        mb = round(total / (1024 ** 2), 2)
+        _FOLDER_SIZE_CACHE.update({"ts": now, "mb": mb, "gb": round(mb / 1024, 3)})
+        return mb
+
+
+def _demo_brain_status() -> dict:
+    """Status of the simulated fallback brain (used when no GGUF is installed)."""
+    try:
+        import demo_brain
+        info = demo_brain.status()
+    except Exception as exc:  # pragma: no cover - defensive
+        return {"enabled": False, "active": False, "error": str(exc)}
+    installed = _installed_models_summary()
+    info["active"] = bool(info.get("enabled")) and installed["count"] == 0
+    info["models_installed"] = installed["count"]
+    return info
+
+
+def _installed_models_summary() -> dict:
+    models_dir = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models")
+    files = []
+    try:
+        for name in sorted(os.listdir(models_dir)):
+            path = os.path.join(models_dir, name)
+            if os.path.isfile(path) and name.lower().endswith(".gguf"):
+                size_mb = round(os.path.getsize(path) / (1024 ** 2), 1)
+                if size_mb >= 100:
+                    files.append({"name": name, "size_mb": size_mb})
+    except OSError:
+        pass
+    return {"count": len(files), "installed": files, "dir": models_dir}
 
 
 class ArgonHandler(BaseHTTPRequestHandler):
@@ -3930,8 +4369,9 @@ class ArgonHandler(BaseHTTPRequestHandler):
                 return
         elif self.path == "/api/status":
             storage = check_storage_safety()
-            storage["folder_size_mb"] = _FOLDER_SIZE_CACHE["mb"]
-            storage["folder_size_gb"] = _FOLDER_SIZE_CACHE["gb"]
+            size_mb = folder_size_mb()
+            storage["folder_size_mb"] = size_mb
+            storage["folder_size_gb"] = round(size_mb / 1024, 3)
             self._send_json(
                 {
                     "boot_id": BOOT_ID,
@@ -3943,6 +4383,10 @@ class ArgonHandler(BaseHTTPRequestHandler):
                     "offline_mode": get_offline_mode(),
                     "flux_status": get_flux_rom_status(),
                     "matrix": {},
+                    "quantum_mode": QUANTUM_MODE["enabled"],
+                    "demo_brain": _demo_brain_status(),
+                    "models": _installed_models_summary(),
+                    "platform": sys.platform,
                 }
             )
         elif self.path == "/api/models/download/status":
@@ -4011,18 +4455,55 @@ class ArgonHandler(BaseHTTPRequestHandler):
         else:
             self._send_json({"error": "Not found"}, status=404)
 
+    @staticmethod
+    def _host_allowed(host: str) -> bool:
+        """Loopback, explicitly allow-listed hosts, and sandbox preview domains."""
+        host = (host or "").strip().lower()
+        if not host:
+            return False
+        name, _, port = host.partition(":")
+        if port and port != str(PORT):
+            return False
+        if name in ("127.0.0.1", "localhost", "0.0.0.0", "[::1]", "::1"):
+            return True
+        for entry in os.environ.get("ARGON_ALLOWED_HOSTS", "").replace(";", ",").split(","):
+            if entry.strip().lower() in (name, host):
+                return True
+        # Live-preview / tunnel domains used by hosted sandboxes.
+        preview_suffixes = (".e2b.app", ".arena.ai", ".ngrok-free.app", ".trycloudflare.com", ".loca.lt")
+        if name.endswith(preview_suffixes):
+            return True
+        return os.environ.get("ARGON_ALLOW_ANY_HOST", "").strip().lower() in ("1", "true", "yes", "on")
+
+    def _request_allowed(self) -> bool:
+        """Same-origin guard: the Host must be trusted and Origin must match it."""
+        host = (self.headers.get("Host") or "").strip().lower()
+        if not self._host_allowed(host):
+            return False
+        origin = (self.headers.get("Origin") or "").strip().lower()
+        if not origin or origin == "null":
+            return True
+        try:
+            origin_host = (urllib.parse.urlsplit(origin).netloc or "").lower()
+        except ValueError:
+            return False
+        return origin_host == host
+
     def do_POST(self) -> None:
-        host_hdr = (self.headers.get("Host") or "").lower()
-        origin_hdr = (self.headers.get("Origin") or "").lower()
-        if host_hdr not in ("127.0.0.1:8080", "localhost:8080"):
+        if not self._request_allowed():
+            host_hdr = (self.headers.get("Host") or "").strip()
+            origin_hdr = (self.headers.get("Origin") or "").strip()
             self.send_response(403)
+            self.send_header("Content-Type", "application/json; charset=utf-8")
             self.end_headers()
-            self._safe_write(b'{"error": "Forbidden Host"}')
-            return
-        if origin_hdr and origin_hdr not in ("http://127.0.0.1:8080", "http://localhost:8080", "null"):
-            self.send_response(403)
-            self.end_headers()
-            self._safe_write(b'{"error": "CSRF Origin Blocked by ARGON Guard"}')
+            reason = "Forbidden Host" if not self._host_allowed(host_hdr) else "CSRF Origin Blocked by ARGON Guard"
+            payload = json.dumps({
+                "error": reason,
+                "hint": "Set ARGON_ALLOWED_HOSTS=<host> (comma separated) to allow another hostname.",
+                "host": host_hdr,
+                "origin": origin_hdr,
+            })
+            self._safe_write(payload.encode("utf-8"))
             return
         data = self._read_json()
         if self.path == "/api/chat":
@@ -4088,7 +4569,8 @@ class ArgonHandler(BaseHTTPRequestHandler):
         elif self.path == "/api/language/select":
             self._send_json(set_selected_language(str(data.get("language", "auto"))))
         elif self.path == "/api/quantum/toggle":
-            self._send_json(set_quantum_mode(bool(data.get("enabled", True))))
+            QUANTUM_MODE["enabled"] = bool(data.get("enabled", True))
+            self._send_json({"quantum_mode": QUANTUM_MODE["enabled"]})
         elif self.path == "/api/matrix/ingest":
             added = ingest_into_100m_matrix(str(data.get("text", "")), source_tag=str(data.get("source_tag", "ui_upload")))
             self._send_json({"added_tokens": added, "matrix": get_matrix_telemetry()})
@@ -4164,15 +4646,23 @@ class ArgonHandler(BaseHTTPRequestHandler):
             prompt = str(data.get("prompt", "")).strip()
             force_offline = bool(data.get("force_offline", False))
             img = generate_image(prompt, force_offline=force_offline)
+            failed = not img.get("url")
             self._send_json(
                 {
-                    "reply": f"Generated image for: **{img['prompt']}**",
-                    "image_url": img["url"],
-                    "image_filename": img["filename"],
-                    "image_mode": img["mode"],
-                    "latency_ms": img["latency_ms"],
-                    "source": img["mode"],
-                    "badge": f"🎨 {img['latency_ms']}ms | {img['mode']}",
+                    "reply": (
+                        f"⚠️ Image generation failed: {img.get('mode') or 'unknown error'}"
+                        if failed else f"Generated image for: **{img['prompt']}**"
+                    ),
+                    "ok": not failed,
+                    "image_url": img.get("url", ""),
+                    "image_filename": img.get("filename", ""),
+                    "image_mode": img.get("mode", ""),
+                    "latency_ms": img.get("latency_ms", 0.0),
+                    "source": img.get("mode", ""),
+                    "badge": (
+                        f"⚠️ {img.get('mode', 'error')}" if failed
+                        else f"🎨 {img.get('latency_ms', 0)}ms | {img.get('mode', '')}"
+                    ),
                 }
             )
         elif self.path == "/api/generate_image":
@@ -4209,6 +4699,26 @@ class ArgonHandler(BaseHTTPRequestHandler):
                 self._send_json({"error": str(exc)}, status=400)
         elif self.path == "/api/ide/files":
             action = str(data.get("action", "")).strip()
+            if action in ("", "list"):
+                target = str(data.get("path", "")).strip() or TERMINAL_CWD
+                if not os.path.exists(target):
+                    target = TERMINAL_CWD
+                items = []
+                try:
+                    for name in sorted(os.listdir(target), key=lambda x: (not os.path.isdir(os.path.join(target, x)), x.lower())):
+                        full = os.path.join(target, name)
+                        is_dir = os.path.isdir(full)
+                        items.append({
+                            "name": name,
+                            "path": full,
+                            "is_dir": is_dir,
+                            "size": 0 if is_dir or not os.path.exists(full) else os.path.getsize(full),
+                            "ext": "" if is_dir else os.path.splitext(name)[1].lower(),
+                        })
+                    self._send_json({"cwd": os.path.abspath(target), "parent": os.path.dirname(os.path.abspath(target)), "items": items})
+                except Exception as exc:
+                    self._send_json({"error": str(exc), "items": []}, status=400)
+                return
             target = str(data.get("path", "")).strip()
             try:
                 if action == "read":
@@ -4327,7 +4837,11 @@ class ArgonHandler(BaseHTTPRequestHandler):
             else:
                 self._send_json(run_code_in_sandbox(code))
         elif self.path == "/api/models/download":
-          self._send_json(start_elite_model_download())
+          only = data.get("models") if isinstance(data.get("models"), list) else None
+          single = data.get("model")
+          if not only and isinstance(single, str) and single.strip():
+            only = [single.strip()]
+          self._send_json(start_elite_model_download(only))
         elif self.path == "/api/shutdown":
             self._send_json({"status": "stopping"})
             harvester.pause()

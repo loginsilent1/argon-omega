@@ -22,9 +22,39 @@ def list_benchmark_models() -> list[dict]:
     return items
 
 
+def _demo_benchmark() -> dict | None:
+    """Simulated benchmark rows so the Benchmark tab works with no GGUF installed."""
+    try:
+        import demo_brain
+    except Exception:
+        return None
+    if not demo_brain.enabled():
+        return None
+    r_chat = answer_query("What is the capital of India? Reply in 3 words.", model="auto", swarm_enabled=False)
+    r_code = answer_query("Write a Python function add(a, b) that returns a + b.", model="auto", swarm_enabled=False)
+    acc = 100 if "delhi" in r_chat.get("reply", "").lower() else 55
+    acc = acc if "def add" in r_code.get("reply", "") else max(0, acc - 25)
+    row = {
+        "filename": "Argon Demo Brain (simulated)",
+        "tier": "DEMO",
+        "use_case": "UI preview · no weights",
+        "size": "0 MB",
+        "size_mb": 0.0,
+        "ttft_ms": r_chat.get("first_token_ms", 0.0),
+        "tok_per_sec": r_chat.get("tok_per_sec", 0.0),
+        "ms_per_token": r_chat.get("ms_per_token", 0.0),
+        "accuracy_score": acc,
+        "demo": True,
+    }
+    return {"results": [row], "models": [row], "demo": True}
+
+
 def run_benchmark(target_model: str = "all") -> dict:
     """Benchmark selected brain or all installed GGUF brains on Speed & Coding/Logic Accuracy."""
     models = list_benchmark_models()
+    demo = _demo_benchmark()
+    if not models and demo and target_model in ("all", "demo", "auto", ""):
+        return demo
     if target_model and target_model != "all":
         models = [m for m in models if m["filename"] == target_model]
 
