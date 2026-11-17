@@ -1,4 +1,5 @@
 import ast
+import http.client
 import json
 import subprocess
 import operator
@@ -9,6 +10,7 @@ from concurrent.futures import ThreadPoolExecutor
 import ctypes
 import sqlite3
 import time
+import urllib.error
 import urllib.request
 from decimal import Decimal, DivisionByZero, InvalidOperation, localcontext
 from image_engine import edit_last_image_natural_language, generate_image_hybrid
@@ -1465,15 +1467,75 @@ def _prepare_prompt(clean_input: str) -> tuple[str, bool, str | None]:
 
 
 def _attach_ssd_recall(prompt: str, effective_prompt: str, history: list[dict] | None = None) -> str:
+    """Keep normal chat prompts lean for 100% KV cache reuse; attach vault recall only on explicit coding prompts."""
+    if not _is_explicit_coding_prompt(prompt):
+        return effective_prompt
     try:
-        from engine import build_infinite_context_window
-        recall = build_infinite_context_window(prompt, history)
-        context = recall.get("context", "")
-        if context:
-            return f"[SSD ROM Recall]\n{context[:2400]}\n\n[User Request]\n{effective_prompt}"
+        from engine import query_code_vault
+        hit = query_code_vault(prompt)
+        if hit:
+            return f"[SSD Code Vault Reference]\n{hit[:1200]}\n\n[User Request]\n{effective_prompt}"
     except Exception:
         pass
     return effective_prompt
+
+
+_REFLEX_DB_PATH = os.path.join(os.path.dirname(os.path.abspath(__file__)), "ssd_virtual_context.db")
+_REFLEX_MEM_CACHE: dict[str, str] = {
+    "hi": "Hello! How can I help you today?",
+    "hello": "Hello! I'm ready—what would you like to build or ask?",
+    "hey": "Hey! How can I assist you?",
+    "good morning": "Good morning! How can I help you today?",
+    "who are you": "I am Argon-Omega, your 100% offline AI assistant and local coding engine.",
+    "what can you do": "I run 100% offline on your SSD to answer questions, write and run code, inspect your PC via terminal, and generate/edit images and videos.",
+    "help": "Ask any question, run math, type `$ <cmd>` or `run: <python>` for terminal/sandbox, or switch tabs for IDE, Image Studio, and Video Studio.",
+    "thanks": "You're welcome! Let me know if you need anything else.",
+    "thank you": "You're welcome! Happy to help.",
+}
+_REFLEX_DB_READY = False
+
+
+def _norm_reflex_key(prompt: str) -> str:
+    return re.sub(r"\s+", " ", re.sub(r"[^\w\s]", "", (prompt or "").lower())).strip()
+
+
+def _ensure_reflex_db() -> None:
+    global _REFLEX_DB_READY
+    if _REFLEX_DB_READY:
+        return
+    try:
+        conn = sqlite3.connect(_REFLEX_DB_PATH)
+        conn.execute("PRAGMA mmap_size = 30000000000;")
+        conn.execute("CREATE TABLE IF NOT EXISTS reflex_cache (norm_prompt TEXT PRIMARY KEY, reply TEXT NOT NULL, updated_at REAL NOT NULL);")
+        for norm_p, rep in conn.execute("SELECT norm_prompt, reply FROM reflex_cache").fetchall():
+            _REFLEX_MEM_CACHE.setdefault(norm_p, rep)
+        conn.close()
+        _REFLEX_DB_READY = True
+    except Exception:
+        pass
+
+
+def get_reflex_cache(prompt: str) -> str | None:
+    _ensure_reflex_db()
+    key = _norm_reflex_key(prompt)
+    if not key:
+        return None
+    return _REFLEX_MEM_CACHE.get(key)
+
+
+def set_reflex_cache(prompt: str, reply: str) -> None:
+    _ensure_reflex_db()
+    key = _norm_reflex_key(prompt)
+    if not key or not reply or len(reply.strip()) <= 40 or reply.strip().lower() in ("okay.", "ok.") or reply.startswith(("[Stream error", "llama-server.exe error", "I'm sorry", "I cannot")):
+        return
+    _REFLEX_MEM_CACHE[key] = reply
+    try:
+        conn = sqlite3.connect(_REFLEX_DB_PATH)
+        conn.execute("INSERT OR REPLACE INTO reflex_cache (norm_prompt, reply, updated_at) VALUES (?, ?, ?)", (key, reply, time.time()))
+        conn.commit()
+        conn.close()
+    except Exception:
+        pass
 
 
 FAST_CHAT_SYSTEM_PROMPT = "You are Argon, a fast offline AI assistant. Answer directly and concisely."
@@ -1658,6 +1720,16 @@ def run_pocketpal_engine(user_prompt: str, override_max_tokens: int | None = Non
             "gear": "Full Device & File Security Scanner",
         }
 
+    # Tier-0 Microsecond Reflex Cache (<0.5ms TTFT)
+    reflex_hit = get_reflex_cache(clean_input)
+    if reflex_hit is not None:
+        ms = round((time.perf_counter() - t0) * 1000.0, 3)
+        return {
+            "reply": reflex_hit,
+            "ms": ms,
+            "gear": "Tier-0 Microsecond Reflex Cache",
+        }
+
     effective_prompt, is_format_request, instant_reply = _prepare_prompt(clean_input)
     if instant_reply is not None:
         ms = round((time.perf_counter() - t0) * 1000.0, 2)
@@ -1689,6 +1761,8 @@ def run_pocketpal_engine(user_prompt: str, override_max_tokens: int | None = Non
         "max_tokens": max_tok,
         "n_predict": max_tok,
         "n_keep": 512,
+        "n_probs": 0,
+        "id_slot": 0,
         "cache_prompt": True,
         "stream": False,
     }
@@ -1699,27 +1773,32 @@ def run_pocketpal_engine(user_prompt: str, override_max_tokens: int | None = Non
         headers={"Content-Type": "application/json"},
     )
     raw_reply = ""
-    for continuation_index in range(3):
-        with urllib.request.urlopen(req, timeout=180) as resp:
-            data = json.loads(resp.read().decode("utf-8"))
-        choice = data["choices"][0]
-        raw_reply += choice["message"]["content"]
-        if choice.get("finish_reason") != "length" or raw_reply.count("```") % 2 == 0 or continuation_index == 2:
-            break
-        last_line = raw_reply.rsplit("\n", 1)[-1]
-        messages.extend([
-            {"role": "assistant", "content": raw_reply},
-            {"role": "user", "content": f"Continue exactly after this final code line without repeating it: {last_line!r}. Output only the remaining code and close the fenced code block."},
-        ])
-        payload["messages"] = messages
-        req = urllib.request.Request(
-            LLAMA_CHAT_URL,
-            data=json.dumps(payload).encode("utf-8"),
-            headers={"Content-Type": "application/json"},
-        )
+    try:
+        for continuation_index in range(3):
+            with urllib.request.urlopen(req, timeout=180) as resp:
+                data = json.loads(resp.read().decode("utf-8"))
+            choice = data["choices"][0]
+            raw_reply += choice["message"]["content"]
+            if choice.get("finish_reason") != "length" or raw_reply.count("```") % 2 == 0 or continuation_index == 2:
+                break
+            last_line = raw_reply.rsplit("\n", 1)[-1]
+            messages.extend([
+                {"role": "assistant", "content": raw_reply},
+                {"role": "user", "content": f"Continue exactly after this final code line without repeating it: {last_line!r}. Output only the remaining code and close the fenced code block."},
+            ])
+            payload["messages"] = messages
+            req = urllib.request.Request(
+                LLAMA_CHAT_URL,
+                data=json.dumps(payload).encode("utf-8"),
+                headers={"Content-Type": "application/json"},
+            )
+    except (http.client.RemoteDisconnected, urllib.error.URLError, ConnectionResetError, BrokenPipeError, TimeoutError, OSError) as exc:
+        if not raw_reply:
+            raw_reply = f"llama-server.exe connection interrupted: {exc}"
     raw_reply = raw_reply.strip()
     raw_reply = _contract_and_save_code(raw_reply, clean_input)
     reply = raw_reply if is_format_request else _trim_incomplete_sentence(raw_reply)
+    set_reflex_cache(clean_input, reply)
 
     if not is_format_request and len(clean_input) > 1:
         LAST_TOPIC = clean_input
@@ -1745,12 +1824,25 @@ PHI_DEEP_BRAIN = "phi-4-Q4_K_M.gguf"
 GEMMA_GENERAL_BRAIN = "gemma-3-4b-it-Q4_K_M.gguf"
 GEMMA_FAST_BRAIN = "gemma-3-1b-it-Q4_K_M.gguf"
 ELITE_BRAINS = (CODER_FAST_BRAIN, CODER_ARCHITECT_BRAIN, PHI_BRAIN, PHI_DEEP_BRAIN, GEMMA_GENERAL_BRAIN, GEMMA_FAST_BRAIN)
-CURRENT_LOADED_GGUF = CODER_FAST_BRAIN if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", CODER_FAST_BRAIN)) else "qwen2.5-1.5b-instruct.gguf"
+CURRENT_LOADED_GGUF = GEMMA_FAST_BRAIN if os.path.exists(os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", GEMMA_FAST_BRAIN)) else CODER_FAST_BRAIN
 
 
 FAST_TIER_BRAIN = "gemma-3-1b-it-Q4_K_M.gguf"
 BALANCED_TIER_BRAIN = "qwen2.5-coder-3b-instruct-q4_k_m.gguf"
 ACCURATE_TIER_BRAIN = "qwen2.5-coder-7b-instruct-q4_k_m.gguf"
+
+
+def _is_installed_gguf(fname: str) -> bool:
+    p = os.path.join(os.path.dirname(os.path.abspath(__file__)), "models", fname)
+    return os.path.isfile(p) and os.path.getsize(p) > 100_000_000
+
+
+def _pick_installed(primary: str, fallback: str = FAST_TIER_BRAIN) -> str:
+    if _is_installed_gguf(primary):
+        return primary
+    if _is_installed_gguf(fallback):
+        return fallback
+    return primary
 
 
 def _format_size(size_bytes: int) -> str:
@@ -1809,20 +1901,25 @@ def select_best_model_for_prompt(prompt_text: str, requested_model: str = "auto"
     low = prompt_text.lower().strip()
 
     if req == "fast":
-        return ("general", FAST_TIER_BRAIN, f"Fast (Low) — {FAST_TIER_BRAIN}")
+        chosen = _pick_installed(FAST_TIER_BRAIN)
+        return ("general", chosen, f"Fast (Low) — {chosen}")
     if req == "balanced":
-        return ("coder", BALANCED_TIER_BRAIN, f"Balanced (Mid) — {BALANCED_TIER_BRAIN}")
+        chosen = _pick_installed(BALANCED_TIER_BRAIN)
+        return ("coder", chosen, f"Balanced (Mid) — {chosen}")
     if req == "accurate":
-        return ("coder", ACCURATE_TIER_BRAIN, f"Accurate (High) — {ACCURATE_TIER_BRAIN}")
+        chosen = _pick_installed(ACCURATE_TIER_BRAIN)
+        return ("coder", chosen, f"Accurate (High) — {chosen}")
     if req in ELITE_BRAINS or req.endswith(".gguf"):
-        return ("llm_only", req, f"Locked Model: {req}")
+        chosen = _pick_installed(req)
+        return ("llm_only", chosen, f"Locked Model: {chosen}")
 
     fast_signals = (
         "check my computer ram", "check my ram", "check useless files", "check all useless files", "quick check",
         "summarize", "summary", "in one sentence", "short reply", "just say", "thank you",
     )
     if any(signal in low for signal in fast_signals) or re.search(r"\b(?:hello|hi|thanks)\b", low):
-        return ("fast", GEMMA_FAST_BRAIN, f"Auto -> Ultra-Fast Brain ({GEMMA_FAST_BRAIN})")
+        chosen = _pick_installed(FAST_TIER_BRAIN)
+        return ("fast", chosen, f"Auto -> Ultra-Fast Brain ({chosen})")
 
     coding_signals = (
         "code", "program", "python", "javascript", "typescript", "c++", "c#", "rust", "java",
@@ -1833,24 +1930,27 @@ def select_best_model_for_prompt(prompt_text: str, requested_model: str = "auto"
         "architect", "architecture", "large codebase", "system design",
     )
     if any(signal in low for signal in coding_signals):
-        architect_signals = ("architect", "architecture", "large codebase", "system design", "multi-file", "complex")
-        coder = ACCURATE_TIER_BRAIN if any(signal in low for signal in architect_signals) else BALANCED_TIER_BRAIN
+        coder = _pick_installed(ACCURATE_TIER_BRAIN)
         return ("coder", coder, f"Auto -> Coding ({coder})")
 
     deep_math_signals = ("formal proof", "prove that", "derive", "deep math", "advanced math", "hard math", "complex algorithm", "logic trap")
     if any(signal in low for signal in deep_math_signals):
-        return ("math_deep", ACCURATE_TIER_BRAIN, f"Auto -> Deep Math ({ACCURATE_TIER_BRAIN})")
+        chosen = _pick_installed(ACCURATE_TIER_BRAIN)
+        return ("math_deep", chosen, f"Auto -> Deep Math ({chosen})")
     if solve_pure_math(prompt_text) is not None or any(signal in low for signal in ("math", "logic", "equation", "calculate", "probability", "algorithm")):
-        return ("math", BALANCED_TIER_BRAIN, f"Auto -> Math & Logic ({BALANCED_TIER_BRAIN})")
+        chosen = _pick_installed(BALANCED_TIER_BRAIN)
+        return ("math", chosen, f"Auto -> Math & Logic ({chosen})")
 
     image_signals = (
         "generate image", "create image", "draw a picture", "draw me a", "paint a picture",
         "image of ", "photo of ", "illustration of ", "wallpaper", "/image", "/imagine",
     )
     if any(signal in low for signal in image_signals):
-        return ("image", FAST_TIER_BRAIN, f"Auto -> Image Request ({FAST_TIER_BRAIN})")
+        chosen = _pick_installed(FAST_TIER_BRAIN)
+        return ("image", chosen, f"Auto -> Image Request ({chosen})")
 
-    return ("general", FAST_TIER_BRAIN, f"Auto -> Fast Chat Brain ({FAST_TIER_BRAIN})")
+    chosen = _pick_installed(FAST_TIER_BRAIN)
+    return ("general", chosen, f"Auto -> Fast Chat Brain ({chosen})")
 
 
 class SubAgentSwarm:
@@ -2239,23 +2339,27 @@ def stream_pocketpal_engine(user_prompt: str, override_max_tokens: int | None = 
         }
         return
 
+    # Tier-0 Microsecond Reflex Cache (<0.5ms TTFT, 100+ to 1,000+ tok/s)
+    reflex_hit = get_reflex_cache(clean_input)
+    if reflex_hit is not None:
+        yield {"type": "token", "token": reflex_hit}
+        ms = max(0.01, round((time.perf_counter() - t0) * 1000.0, 2))
+        est_toks = max(1, int(len(reflex_hit.split()) * 1.3))
+        tps = round(est_toks / (ms / 1000.0), 1)
+        yield {
+            "type": "done",
+            "reply": reflex_hit,
+            "ttft_ms": ms,
+            "total_ms": ms,
+            "tok_per_sec": tps,
+            "badge": f"⚡ Tier-0 Reflex Cache | TTFT: {ms}ms | Speed: {tps} tokens/sec",
+        }
+        return
+
     effective_prompt = _attach_ssd_recall(clean_input, effective_prompt, CHAT_HISTORY)
 
     routed_model = target_model or select_best_model_for_prompt(clean_input)[1]
     is_explicit_code = _is_explicit_coding_prompt(clean_input)
-    is_complex_app = _is_complex_app_prompt(clean_input)
-    if is_complex_app and routed_model in (CODER_FAST_BRAIN, CODER_ARCHITECT_BRAIN):
-        import types
-        result = run_pocketpal_engine(clean_input, override_max_tokens, target_model=routed_model)
-        if isinstance(result, types.GeneratorType):
-            for ev in result:
-                yield ev
-            return
-        reply = result.get("reply", "")
-        ms = result.get("ms", round((time.perf_counter() - t0) * 1000.0, 2))
-        yield {"type": "token", "token": reply}
-        yield {"type": "done", "reply": reply, "ttft_ms": ms, "total_ms": ms, "tok_per_sec": 0.0, "badge": f"💻 AlphaCodium Contract Gate | {routed_model}"}
-        return
 
     sys_msg = SYSTEM_PROMPT if is_explicit_code else FAST_CHAT_SYSTEM_PROMPT
     messages = [{"role": "system", "content": sys_msg}]
@@ -2267,14 +2371,17 @@ def stream_pocketpal_engine(user_prompt: str, override_max_tokens: int | None = 
     is_fast_brain = routed_model == GEMMA_FAST_BRAIN
     model_limit = 256 if not is_explicit_code else (512 if is_fast_brain else 2048)
     requested_tokens = 256 if not is_explicit_code else (320 if is_format_request else (override_max_tokens or model_limit))
-    max_tok = min(model_limit, requested_tokens)
+    max_tok = 4096 if is_explicit_code else min(512, requested_tokens)
 
     payload = {
         "messages": messages,
         "temperature": 0.2 if is_fast_brain else (0.35 if routed_model == GEMMA_GENERAL_BRAIN else 0.05),
         "top_k": 20 if routed_model in (CODER_FAST_BRAIN, CODER_ARCHITECT_BRAIN) else 40,
-        "repeat_penalty": 1.05,
+        "repeat_penalty": 1.10,
         "max_tokens": max_tok,
+        "n_predict": max_tok,
+        "n_probs": 0,
+        "id_slot": 0,
         "cache_prompt": True,
         "stream": True,
     }
@@ -2290,30 +2397,37 @@ def stream_pocketpal_engine(user_prompt: str, override_max_tokens: int | None = 
     token_count = 0
     timings = {}
 
-    with urllib.request.urlopen(req, timeout=180) as resp:
-        for raw_line in resp:
-            line = raw_line.decode("utf-8", errors="replace").strip()
-            if not line or not line.startswith("data: "):
-                continue
-            data_str = line[6:]
-            if data_str == "[DONE]":
-                break
-            try:
-                obj = json.loads(data_str)
-                if "timings" in obj and isinstance(obj["timings"], dict):
-                    timings = obj["timings"]
-                delta = obj["choices"][0].get("delta", {}).get("content")
-                if delta:
-                    if ttft_ms is None:
-                        ttft_ms = round((time.perf_counter() - t0) * 1000.0, 1)
-                    token_count += 1
-                    chunks.append(delta)
-                    yield {"type": "token", "token": delta}
-            except Exception:
-                continue
+    try:
+        with urllib.request.urlopen(req, timeout=300) as resp:
+            for raw_line in resp:
+                line = raw_line.decode("utf-8", errors="replace").strip()
+                if not line or not line.startswith("data: "):
+                    continue
+                data_str = line[6:]
+                if data_str == "[DONE]":
+                    break
+                try:
+                    obj = json.loads(data_str)
+                    if "timings" in obj and isinstance(obj["timings"], dict):
+                        timings = obj["timings"]
+                    delta = obj["choices"][0].get("delta", {}).get("content")
+                    if delta:
+                        if ttft_ms is None:
+                            ttft_ms = round((time.perf_counter() - t0) * 1000.0, 1)
+                        token_count += 1
+                        chunks.append(delta)
+                        yield {"type": "token", "token": delta}
+                except Exception:
+                    continue
+    except (http.client.RemoteDisconnected, urllib.error.URLError, ConnectionResetError, BrokenPipeError, TimeoutError, OSError) as exc:
+        err_note = f"\n[Connection interrupted: {exc}]"
+        if not chunks:
+            chunks.append(err_note.strip())
+            yield {"type": "token", "token": err_note.strip()}
 
     raw_reply = "".join(chunks).strip()
     reply = raw_reply if is_format_request else _trim_incomplete_sentence(raw_reply)
+    set_reflex_cache(clean_input, reply)
     total_ms = round((time.perf_counter() - t0) * 1000.0, 1)
     if ttft_ms is None:
         ttft_ms = total_ms

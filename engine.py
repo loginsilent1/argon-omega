@@ -34,6 +34,14 @@ PHI_BRAIN = "Phi-4-mini-instruct-Q4_K_M.gguf"
 PHI_DEEP_BRAIN = "phi-4-Q4_K_M.gguf"
 GEMMA_GENERAL_BRAIN = "gemma-3-4b-it-Q4_K_M.gguf"
 GEMMA_FAST_BRAIN = "gemma-3-1b-it-Q4_K_M.gguf"
+
+FAST_DEFAULT_BRAIN = GEMMA_FAST_BRAIN
+BALANCED_CODER_BRAIN = "qwen2.5-coder-3b-instruct-q4_k_m.gguf"
+HIGH_CODER_BRAIN = CODER_FAST_BRAIN
+DEFAULT_BRAIN = FAST_DEFAULT_BRAIN
+
+EXCLUDED_MODEL_PREFIXES = ("sd_turbo", "flux", "wan", "umt5", "t5xxl", "clip", "ae", "dreamshaper")
+
 ELITE_BRAINS = {
     CODER_FAST_BRAIN: "https://huggingface.co/Qwen/Qwen2.5-Coder-7B-Instruct-GGUF/resolve/main/qwen2.5-coder-7b-instruct-q4_k_m.gguf",
     CODER_ARCHITECT_BRAIN: "https://huggingface.co/bartowski/Qwen2.5-Coder-32B-Instruct-GGUF/resolve/main/Qwen2.5-Coder-32B-Instruct-IQ3_XS.gguf",
@@ -42,14 +50,6 @@ ELITE_BRAINS = {
     GEMMA_GENERAL_BRAIN: "https://huggingface.co/bartowski/google_gemma-3-4b-it-GGUF/resolve/main/google_gemma-3-4b-it-Q4_K_M.gguf",
     GEMMA_FAST_BRAIN: "https://huggingface.co/bartowski/google_gemma-3-1b-it-GGUF/resolve/main/google_gemma-3-1b-it-Q4_K_M.gguf",
 }
-DEFAULT_BRAIN = CODER_FAST_BRAIN
-LEGACY_TEXT_MODELS = (
-    "qwen-0.5b-fast.gguf",
-    "dolphin-1b.gguf",
-    "qwen-1.5b-uncensored.gguf",
-    "deepseek-r1-1.5b.gguf",
-    "qwen-coder-1.5b.gguf",
-)
 
 _SERVER_LOCK = threading.Lock()
 _SERVER_PROC: subprocess.Popen | None = None
@@ -65,7 +65,9 @@ _DOWNLOAD_STATE = {
 _RAM_TRIMMER_STOP = threading.Event()
 
 CODER_PRIORITY = (
-    CODER_FAST_BRAIN,
+    HIGH_CODER_BRAIN,
+    BALANCED_CODER_BRAIN,
+    FAST_DEFAULT_BRAIN,
 )
 
 
@@ -103,8 +105,6 @@ def switch_llama_server_model(model_name: str) -> tuple[bool, str | None]:
     """Physically switch llama-server.exe on port 8081 to `model_name` if not already loaded."""
     if CURRENT_LOADED_GGUF and CURRENT_LOADED_GGUF.casefold() == model_name.casefold():
         return True, model_name
-    if CURRENT_LOADED_GGUF:
-        save_kv_slot_to_ssd(CURRENT_LOADED_GGUF)
     ok, loaded = ensure_model_loaded_in_llama_server(model_name)
     return ok, loaded
 
@@ -362,6 +362,21 @@ class GlobalInfiniteContextEngine:
         finally:
             conn.close()
 
+    @classmethod
+    def assemble(cls, prompt: str, history: list[dict] | None = None) -> dict:
+        t0 = time.perf_counter()
+        pruned_hist = cls.prune_low_entropy_tokens(compress_context_tokens(history or []))
+        paged = cls.page_in_blocks(prompt, top_k=6)
+        graph_hits = query_context_graph(prompt)
+        dt = round((time.perf_counter() - t0) * 1000.0, 2)
+        return {
+            "pruned_history": pruned_hist,
+            "paged_blocks": len(paged),
+            "graph_hits": len(graph_hits),
+            "assembly_ms": dt,
+        }
+
+
 def detect_entropy_spikes(logprobs: list[float], threshold: float = 0.40) -> list[int]:
     """Stanford Logprobs Entropy Radar: flag token indices where exp(logprob) < threshold."""
     import math
@@ -407,20 +422,6 @@ def run_alphacodium_contract_gate(code: str, lang: str = "html", topic: str = ""
         "issues": issues,
         "repaired": repaired,
     }
-
-
-    @classmethod
-    def assemble(cls, prompt: str, history: list[dict] | None = None) -> dict:
-        pruned_hist = cls.prune_low_entropy_tokens(compress_context_tokens(history or []))
-        paged = cls.page_in_blocks(prompt, top_k=6)
-        graph_hits = query_context_graph(prompt)
-        dt = round((time.perf_counter() - t0) * 1000.0, 2)
-        return {
-            "pruned_history": pruned_hist,
-            "paged_blocks": len(paged),
-            "graph_hits": len(graph_hits),
-            "assembly_ms": dt,
-        }
 
 
 def init_code_vault() -> None:
@@ -807,17 +808,32 @@ def set_selected_language(lang: str) -> dict:
     return {"language": lang}
 
 
+def _is_valid_text_gguf(filename: str) -> bool:
+    low = filename.lower()
+    if not low.endswith(".gguf") or low.endswith(".part"):
+        return False
+    return not any(low.startswith(pref) for pref in EXCLUDED_MODEL_PREFIXES)
+
+
 def _resolve_gguf_path(target_name: str | None = None) -> str | None:
     os.makedirs(MODELS_DIR, exist_ok=True)
     requested = target_name or DEFAULT_BRAIN
     if requested == "auto":
         requested = DEFAULT_BRAIN
-    if requested in ELITE_BRAINS:
+    if _is_valid_text_gguf(requested):
         candidate = _find_model_path(requested)
-        if candidate and os.path.getsize(candidate) > 1_000_000:
+        if candidate and os.path.getsize(candidate) > 100_000_000:
             return candidate
-    fallback = _find_model_path(CODER_FAST_BRAIN)
-    return fallback if fallback and os.path.getsize(fallback) > 1_000_000 else None
+    for fallback_name in (FAST_DEFAULT_BRAIN, BALANCED_CODER_BRAIN, HIGH_CODER_BRAIN):
+        fb = _find_model_path(fallback_name)
+        if fb and os.path.getsize(fb) > 100_000_000:
+            return fb
+    for existing in sorted(os.listdir(MODELS_DIR)):
+        if _is_valid_text_gguf(existing):
+            cand = os.path.join(MODELS_DIR, existing)
+            if os.path.isfile(cand) and os.path.getsize(cand) > 100_000_000:
+                return cand
+    return None
 
 
 def _resolve_hf_url(primary_url: str) -> str | None:
@@ -943,27 +959,8 @@ def start_elite_model_download() -> dict:
 
 
 def cleanup_legacy_text_models() -> dict:
-    """Remove only the named legacy text GGUFs after all six elite files are complete."""
-    missing = [
-        name for name in ELITE_BRAINS
-        if not os.path.isfile(os.path.join(MODELS_DIR, name))
-        or os.path.getsize(os.path.join(MODELS_DIR, name)) <= 100_000_000
-    ]
-    if missing:
-        return {"ok": False, "removed": [], "missing_elite_models": missing}
-
-    removed = []
-    errors = []
-    for filename in LEGACY_TEXT_MODELS:
-        path = os.path.join(MODELS_DIR, filename)
-        if not os.path.isfile(path):
-            continue
-        try:
-            os.remove(path)
-            removed.append(filename)
-        except OSError as exc:
-            errors.append({"filename": filename, "error": str(exc)})
-    return {"ok": not errors, "removed": removed, "errors": errors}
+    """No-op legacy cleanup placeholder."""
+    return {"ok": True, "removed": [], "errors": []}
 
 
 def _prewarm_server() -> None:
@@ -1003,41 +1000,18 @@ def _get_optimal_threads() -> str:
                     return str(t)
         except Exception:
             pass
-    return str(max(2, (os.cpu_count() or 4) // 2))
+    return str(max(2, os.cpu_count() or 4))
 
 
 def ensure_llama_server(target_model: str | None = None) -> tuple[bool, str | None]:
-    """Launch llama-server.exe with HIGH_PRIORITY_CLASS and optimal physical threads."""
+    """Launch llama-server.exe with optimal threads, 1 slot, 4-bit KV cache, and safe fallback."""
     global _SERVER_PROC, _ACTIVE_MODEL_NAME, _RAM_TRIMMER_STOP
     with _SERVER_LOCK:
         gguf_path = _resolve_gguf_path(target_model or _SELECTED_MODE)
-        if not gguf_path:
-            old_server_stopped = False
-            if _SERVER_PROC is not None and _SERVER_PROC.poll() is None:
-                _RAM_TRIMMER_STOP.set()
-                if _ACTIVE_MODEL_NAME:
-                    save_kv_slot_to_ssd(_ACTIVE_MODEL_NAME)
-                try:
-                    _SERVER_PROC.terminate()
-                    _SERVER_PROC.wait(timeout=5)
-                except Exception:
-                    try:
-                        _SERVER_PROC.kill()
-                    except Exception:
-                        pass
-                _SERVER_PROC = None
-                old_server_stopped = True
-            if _terminate_llama_server_on_port():
-                old_server_stopped = True
-            if old_server_stopped:
-                try:
-                    from video_engine import purge_ram_to_ssd
-                    purge_ram_to_ssd()
-                except Exception:
-                    pass
-            _ACTIVE_MODEL_NAME = None
-            return False, None
-        if not os.path.exists(LLAMA_SERVER_EXE):
+        if not gguf_path or not os.path.exists(LLAMA_SERVER_EXE):
+            # Never kill an already-healthy server if a requested model is missing
+            if _SERVER_PROC is not None and _SERVER_PROC.poll() is None and _ACTIVE_MODEL_NAME:
+                return True, _ACTIVE_MODEL_NAME
             return False, None
 
         desired_name = os.path.basename(gguf_path)
@@ -1051,11 +1025,8 @@ def ensure_llama_server(target_model: str | None = None) -> tuple[bool, str | No
             except Exception:
                 pass
 
-        old_server_stopped = False
         if _SERVER_PROC is not None and _SERVER_PROC.poll() is None:
             _RAM_TRIMMER_STOP.set()
-            if _ACTIVE_MODEL_NAME:
-                save_kv_slot_to_ssd(_ACTIVE_MODEL_NAME)
             try:
                 _SERVER_PROC.terminate()
                 _SERVER_PROC.wait(timeout=5)
@@ -1065,78 +1036,74 @@ def ensure_llama_server(target_model: str | None = None) -> tuple[bool, str | No
                 except Exception:
                     pass
             _SERVER_PROC = None
-            old_server_stopped = True
 
-        if _SERVER_PROC is None and _terminate_llama_server_on_port():
-            old_server_stopped = True
-        if old_server_stopped:
-            try:
-                from video_engine import purge_ram_to_ssd
-                purge_ram_to_ssd()
-            except Exception:
-                pass
+        if _SERVER_PROC is None:
+            _terminate_llama_server_on_port()
 
-        _ACTIVE_MODEL_NAME = desired_name
         threads = _get_optimal_threads()
-        os.makedirs(SSD_KV_CACHE_DIR, exist_ok=True)
-        cmd = [
-            LLAMA_SERVER_EXE,
-            "-m", gguf_path,
-            "--host", "127.0.0.1",
-            "--port", "8081",
-            "-c", "2048",
-            "-np", "1",
-            "-b", "256",
-            "-ub", "256",
-            "--no-repack",
-            "--no-warmup",
-            "-t", str(max(2, (os.cpu_count() or 4) // 2)),
-            "-tb", str(max(2, (os.cpu_count() or 4) // 2)),
-        ]
-        fallback_cmd = [
-            LLAMA_SERVER_EXE,
-            "-m", gguf_path,
-            "--host", "127.0.0.1",
-            "--port", "8081",
-            "-c", "2048",
-        ]
-        creationflags = (
-            subprocess.HIGH_PRIORITY_CLASS
-            if os.name == "nt"
-            else 0
-        )
+        creationflags = subprocess.HIGH_PRIORITY_CLASS if os.name == "nt" else 0
 
-        def _launch_and_wait(launch_cmd):
+        def _try_boot_model(m_path: str) -> bool:
             global _SERVER_PROC, _RAM_TRIMMER_STOP
-            print(f"[ARGON-OMEGA] Launching llama-server.exe: {' '.join(launch_cmd)}", flush=True)
-            _SERVER_PROC = subprocess.Popen(
-                launch_cmd,
-                stdout=None,
-                stderr=None,
-                creationflags=creationflags,
-            )
-            _RAM_TRIMMER_STOP = threading.Event()
-            for _ in range(180):  # up to 90 seconds for 4.4 GB 7B SSD mmap
-                if _SERVER_PROC.poll() is not None:
-                    err_out = (_SERVER_PROC.stderr.read() or b"").decode("utf-8", errors="ignore").strip()
-                    if err_out:
-                        print(f"[llama-server.exe stderr] {err_out}")
-                    return False
-                try:
-                    req = urllib.request.Request("http://127.0.0.1:8081/health", method="GET")
-                    with urllib.request.urlopen(req, timeout=1) as resp:
-                        if resp.status == 200:
-                            restore_kv_slot_from_ssd(desired_name)
-                            return True
-                except Exception:
-                    time.sleep(0.5)
+            is_7b = "7b" in os.path.basename(m_path).lower()
+            ctx_primary = "16384" if is_7b else "32768"
+            ctx_fallback = "8192" if is_7b else "16384"
+            cmds = [
+                [
+                    LLAMA_SERVER_EXE, "-m", m_path, "--host", "127.0.0.1", "--port", "8081",
+                    "--mmap", "--no-repack", "-np", "1", "--context-shift", "--no-warmup",
+                    "-c", ctx_primary, "-b", "512", "-ub", "512", "-t", threads, "-tb", threads,
+                ],
+                [
+                    LLAMA_SERVER_EXE, "-m", m_path, "--host", "127.0.0.1", "--port", "8081",
+                    "--no-repack", "-np", "1", "--no-warmup",
+                    "-c", ctx_fallback, "-b", "512", "-ub", "512", "-t", threads, "-tb", threads,
+                ],
+                [
+                    LLAMA_SERVER_EXE, "-m", m_path, "--host", "127.0.0.1", "--port", "8081",
+                    "-np", "1", "-c", "8192", "-b", "512", "-ub", "512", "-t", threads, "-tb", threads,
+                ],
+            ]
+            for launch_cmd in cmds:
+                print(f"[ARGON-OMEGA] Launching llama-server.exe: {' '.join(launch_cmd)}", flush=True)
+                _SERVER_PROC = subprocess.Popen(
+                    launch_cmd,
+                    stdout=subprocess.DEVNULL,
+                    stderr=subprocess.DEVNULL,
+                    creationflags=creationflags,
+                )
+                _RAM_TRIMMER_STOP = threading.Event()
+                for _ in range(120):
+                    if _SERVER_PROC.poll() is not None:
+                        break
+                    try:
+                        req = urllib.request.Request("http://127.0.0.1:8081/health", method="GET")
+                        with urllib.request.urlopen(req, timeout=1) as resp:
+                            if resp.status == 200:
+                                threading.Thread(target=_prewarm_server, daemon=True).start()
+                                return True
+                    except Exception:
+                        time.sleep(0.5)
+                if _SERVER_PROC.poll() is None:
+                    try:
+                        _SERVER_PROC.terminate()
+                        _SERVER_PROC.wait(timeout=3)
+                    except Exception:
+                        pass
             return False
 
-        if _launch_and_wait(cmd):
+        if _try_boot_model(gguf_path):
+            _ACTIVE_MODEL_NAME = desired_name
             return True, _ACTIVE_MODEL_NAME
-        if _launch_and_wait(fallback_cmd):
-            return True, _ACTIVE_MODEL_NAME
-        return False, _ACTIVE_MODEL_NAME
+
+        # Fallback to FAST_DEFAULT_BRAIN if a larger model (e.g. 7B) failed CPU_REPACK/allocation
+        fb_path = _find_model_path(FAST_DEFAULT_BRAIN)
+        if fb_path and os.path.abspath(fb_path) != os.path.abspath(gguf_path):
+            if _try_boot_model(fb_path):
+                _ACTIVE_MODEL_NAME = os.path.basename(fb_path)
+                return True, _ACTIVE_MODEL_NAME
+
+        return False, desired_name
 
 
 def _terminate_llama_server_on_port() -> bool:
@@ -1212,8 +1179,6 @@ def stop_llama_server() -> None:
     global _SERVER_PROC, _ACTIVE_MODEL_NAME, CURRENT_LOADED_GGUF
     with _SERVER_LOCK:
         _RAM_TRIMMER_STOP.set()
-        if _ACTIVE_MODEL_NAME:
-            save_kv_slot_to_ssd(_ACTIVE_MODEL_NAME)
         if _SERVER_PROC is not None and _SERVER_PROC.poll() is None:
             try:
                 _SERVER_PROC.terminate()

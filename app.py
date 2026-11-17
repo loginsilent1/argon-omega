@@ -1,4 +1,5 @@
 import base64
+import http.client
 import json
 import os
 import shutil
@@ -3888,16 +3889,21 @@ class ArgonHandler(BaseHTTPRequestHandler):
     def log_message(self, format: str, *args) -> None:
         return
 
+    def _safe_write(self, body: bytes) -> bool:
+        try:
+            self.wfile.write(body)
+            self.wfile.flush()
+            return True
+        except (http.client.RemoteDisconnected, ConnectionResetError, BrokenPipeError, ConnectionAbortedError, OSError):
+            return False
+
     def _send_json(self, payload: dict, status: int = 200) -> None:
         body = json.dumps(payload).encode("utf-8")
         self.send_response(status)
         self.send_header("Content-Type", "application/json; charset=utf-8")
         self.send_header("Content-Length", str(len(body)))
         self.end_headers()
-        try:
-            self.wfile.write(body)
-        except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, OSError):
-            return
+        self._safe_write(body)
 
     def _read_json(self) -> dict:
         length = int(self.headers.get("Content-Length", 0))
@@ -3961,7 +3967,7 @@ class ArgonHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", ctype)
                 self.send_header("Content-Length", str(len(vdata)))
                 self.end_headers()
-                self.wfile.write(vdata)
+                self._safe_write(vdata)
             else:
                 self._send_json({"error": "Video not found"}, status=404)
         elif self.path.startswith("/api/ide/files"):
@@ -4011,12 +4017,12 @@ class ArgonHandler(BaseHTTPRequestHandler):
         if host_hdr not in ("127.0.0.1:8080", "localhost:8080"):
             self.send_response(403)
             self.end_headers()
-            self.wfile.write(b'{"error": "Forbidden Host"}')
+            self._safe_write(b'{"error": "Forbidden Host"}')
             return
         if origin_hdr and origin_hdr not in ("http://127.0.0.1:8080", "http://localhost:8080", "null"):
             self.send_response(403)
             self.end_headers()
-            self.wfile.write(b'{"error": "CSRF Origin Blocked by ARGON Guard"}')
+            self._safe_write(b'{"error": "CSRF Origin Blocked by ARGON Guard"}')
             return
         data = self._read_json()
         if self.path == "/api/chat":
@@ -4041,10 +4047,7 @@ class ArgonHandler(BaseHTTPRequestHandler):
             t_level = str(data.get("thinking_level", "mid"))
             for ev in stream_query(str(data.get("prompt", "")), language=lang, quantum_mode=q_mode, thinking_level=t_level):
                 chunk = f"data: {json.dumps(ev)}\n\n".encode("utf-8")
-                try:
-                    self.wfile.write(chunk)
-                    self.wfile.flush()
-                except (ConnectionResetError, BrokenPipeError, ConnectionAbortedError, OSError):
+                if not self._safe_write(chunk):
                     return
         elif self.path == "/api/harvester/start":
             self._send_json(harvester.start())
@@ -4349,7 +4352,7 @@ class ArgonHandler(BaseHTTPRequestHandler):
                 self.send_header("Content-Type", ctype)
                 self.send_header("Content-Length", str(len(vdata)))
                 self.end_headers()
-                self.wfile.write(vdata)
+                self._safe_write(vdata)
             else:
                 self._send_json({"error": "Video not found"}, status=404)
         elif self.path.startswith("/api/ide/files"):
