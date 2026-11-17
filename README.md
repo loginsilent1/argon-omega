@@ -155,6 +155,18 @@ static checks actually found.
   the URL; picking a result is what moves you to `/chat`.
 - **Top bar is minimal**: brand, demo chip and the offline toggle only — Models and Settings
   are not up there any more.
+- **Search chats sits between Tools and Recent chats**, where you look for it: it shows as a
+  compact row, expands into a text field on tap (Esc clears and folds it back), filters while
+  you type, and never rewrites the URL.
+- **Phone and desktop are one code path**: below 820px the rail is a drawer opened by ☰ with
+  a scrim and a locked body; at 820px and up it is a permanent panel. A layout watchdog
+  re-applies the right state whenever the width changes — rotate, fold/unfold, split-screen
+  or a resized desktop window — so a phone can never inherit the desktop `width:0` rail and a
+  desktop can never inherit the drawer transform. Dynamic viewport units (`100dvh`) plus
+  `env(safe-area-inset-*)` keep it usable on notched phones and inside mobile browsers'
+  collapsing toolbars, `.main`/`.tab-view` can shrink instead of overflowing, and 16px inputs
+  on touch devices stop iOS from zooming the page. Extra breakpoints cover short landscape
+  phones (≤500px tall), very narrow covers (≤380px) and 821–1100px tablets/laptops.
 - **Settings is one vertical stack**: the four sections are a compact horizontal chip strip
   across the top (Benchmark · Engine · Security · Workspace), and everything under it runs
   full-width down the page — benchmark cards one per row, buttons stacked, then the check

@@ -63,7 +63,7 @@ HTML_UI = r"""<!DOCTYPE html>
 <html lang="en">
 <head>
   <meta charset="UTF-8" />
-  <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover, interactive-widget=resizes-content" />
   <title>ARGON-OMEGA | Offline AI</title>
   <style>
     :root {
@@ -2343,6 +2343,74 @@ HTML_UI = r"""<!DOCTYPE html>
     .models-panel .model-row { flex-wrap: wrap; gap: 6px 10px; }
     .models-panel .model-row .m-state { margin-left: 0; width: 100%; justify-content: space-between; }
 
+    /* ---------- search chats row (between Tools and Recent chats) ---------- */
+    .sidebar-search.search-row {
+      display: flex; align-items: center; gap: 8px; width: auto;
+      min-height: 36px; margin: 0 6px 2px; padding: 6px 10px;
+      background: rgba(148,163,184,.06); border: 1px solid var(--border-subtle);
+      border-radius: 10px; cursor: text; text-align: left;
+      color: #8fa0b3; font-family: inherit; font-size: .76rem; font-weight: 600;
+      touch-action: manipulation;
+    }
+    .sidebar-search.search-row:hover { background: rgba(148,163,184,.12); color: #e8f6ff; }
+    .search-row-text { overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+    .sidebar-search.search-field { min-height: 36px; margin: 0 6px 2px; padding: 6px 10px; }
+
+    /* ---------- every device: phone drawer ⇄ desktop panel ----------
+       A phone must never inherit the desktop collapsed state (`width:0; opacity:0`), which
+       used to hide the whole rail while its overlay still ate taps; and a desktop must
+       never inherit the drawer's `translateX(-100%)`. These rules are the last word. */
+    @supports (height: 100dvh) {
+      body { height: 100dvh; min-height: 100dvh; }
+      .main { height: 100%; }
+    }
+    html, body { max-width: 100%; overflow-x: hidden; }
+    .main, .tab-view { min-width: 0; }
+    img, video, canvas { max-width: 100%; height: auto; }
+    .sidebar:not(.collapsed) {
+      opacity: 1; transform: none; margin-left: 0; pointer-events: auto; visibility: visible;
+    }
+    .sidebar-foot { padding-bottom: max(4px, env(safe-area-inset-bottom)); }
+    .sidebar-header { padding-top: max(6px, env(safe-area-inset-top)); }
+    /* iOS zooms the page when a sub-16px field gets focus */
+    @media (pointer: coarse) and (max-width: 900px) {
+      .sidebar-search input, #cveQuery, .topbar-controls input, .gallery-toolbar input { font-size: 16px; }
+    }
+    /* phones held sideways: the drawer must not cover the whole page */
+    @media (max-width: 820px) and (max-height: 500px) {
+      .sidebar { width: min(74vw, 300px) !important; }
+      .sidebar-header { min-height: 36px; padding: 4px 8px; }
+      .sidebar .btn-new-chat, .btn-new-chat.compact { min-height: 36px; margin-bottom: 4px; }
+      .sidebar-search.search-row, .sidebar-search.search-field { min-height: 34px; }
+      .history-item { min-height: 38px; padding: 6px 8px; }
+      .topbar { min-height: 40px; padding: 4px 8px; }
+      .composer-tools { flex-wrap: nowrap; overflow-x: auto; }
+      .welcome-screen { padding: 12px 6px; gap: 8px; }
+      .suggestion-grid { gap: 6px; }
+      .models-panel { max-height: 96vh; }
+      .models-head { padding: 10px 12px 8px; }
+    }
+    /* very narrow phones (SE/mini/fold-cover) */
+    @media (max-width: 380px) {
+      .sidebar { padding: 8px 6px; }
+      .sidebar-actions .sidebar-action.icon-only { min-height: 34px; font-size: .95rem; }
+      .sidebar-search.search-row, .sidebar-search.search-field { margin: 0 4px 2px; }
+      .topbar .brand-name { display: none; }
+      .send-btn { width: 34px; height: 34px; }
+      .settings-tab { padding: 4px 7px; font-size: .64rem; }
+    }
+    /* tablets and small laptops: give the page more room, keep the rail comfortable */
+    @media (min-width: 821px) and (max-width: 1100px) {
+      :root { --sidebar-w: 226px; }
+      .sidebar { width: 226px; }
+      .settings-panel { max-width: 100%; }
+      .models-panel { width: min(680px, 100%); }
+    }
+    /* fine-pointer desktops: plenty of height, nothing clipped */
+    @media (min-width: 821px) and (min-height: 900px) {
+      .sidebar > .history-list { min-height: 120px; }
+    }
+
     /* ---------- mobile drawer (last word: it must win over the desktop panel rules) ---------- */
     @media (max-width: 820px) {
       .sidebar {
@@ -2403,11 +2471,6 @@ HTML_UI = r"""<!DOCTYPE html>
       <span aria-hidden="true">＋</span><span>New chat</span>
     </button>
 
-    <label class="sidebar-search" for="chatSearchInput">
-      <span aria-hidden="true">🔎</span>
-      <input id="chatSearchInput" type="search" placeholder="Search chats…" autocomplete="off" oninput="filterHistory(this.value)" />
-    </label>
-
     <div class="tools-drawer" id="toolsDrawer">
       <button class="tools-toggle" id="toolsToggle" onclick="toggleToolsDrawer()" aria-expanded="true" aria-controls="toolsList">
         <span class="tt-label"><span aria-hidden="true">🧰</span> Tools</span>
@@ -2425,6 +2488,15 @@ HTML_UI = r"""<!DOCTYPE html>
         </button>
       </div>
     </div>
+
+    <button type="button" class="sidebar-search search-row" id="chatSearchBtn" onclick="focusChatSearch()" aria-label="Search chats">
+      <span aria-hidden="true">🔎</span>
+      <span class="search-row-text">Search chats…</span>
+    </button>
+    <label class="sidebar-search search-field" id="chatSearchField" for="chatSearchInput" role="search" style="display:none;">
+      <span aria-hidden="true">🔎</span>
+      <input id="chatSearchInput" type="search" placeholder="Search chats…" autocomplete="off" oninput="filterHistory(this.value)" />
+    </label>
 
     <div class="sidebar-section-header">
       <span class="sidebar-section-title">Recent chats</span>
@@ -2974,6 +3046,41 @@ HTML_UI = r"""<!DOCTYPE html>
       document.body.classList.toggle('sidebar-open', overlayOn);
     }
 
+    /* Search chats sits between the Tools drawer and Recent chats. It shows as a compact
+       row first and only turns into a real text field when tapped, so the rail stays tidy
+       on phones and the list never gets pushed around by a focused input. */
+    function focusChatSearch() {
+      const field = document.getElementById('chatSearchField');
+      const btn = document.getElementById('chatSearchBtn');
+      if (!field) return;
+      field.style.display = '';
+      if (btn) btn.style.display = 'none';
+      const input = document.getElementById('chatSearchInput');
+      if (input) { try { input.focus(); input.select(); } catch (e) {} }
+    }
+    function blurChatSearch() {
+      const field = document.getElementById('chatSearchField');
+      const btn = document.getElementById('chatSearchBtn');
+      const input = document.getElementById('chatSearchInput');
+      const empty = !input || !input.value.trim();
+      if (!field) return;
+      if (empty) {
+        field.style.display = 'none';
+        if (btn) btn.style.display = '';
+      }
+    }
+
+    /* Esc in the search box clears the filter and folds the row back to a button */
+    document.addEventListener('keydown', (e) => {
+      const input = e.target;
+      if (!input || input.id !== 'chatSearchInput' || e.key !== 'Escape') return;
+      e.stopPropagation();
+      input.value = '';
+      try { filterHistory(''); } catch (err) {}
+      blurChatSearch();
+      input.blur();
+    });
+
     function toggleToolsDrawer(force) {
       const drawer = document.getElementById('toolsDrawer');
       const toggle = document.getElementById('toolsToggle');
@@ -2985,6 +3092,7 @@ HTML_UI = r"""<!DOCTYPE html>
     }
 
     let modelsPoll = null;   // hoisted: /models can be applied during boot
+    let layoutPhone = null;  // hoisted: syncLayoutMode() runs during boot
     const TAB_URL = {
       chat: '/chat', ide: '/ide', gallery: '/gallery', editor: '/editor',
       video: '/video', benchmark: '/benchmark', sandbox: '/sandbox'
@@ -5563,11 +5671,7 @@ print("Primes < 50:", primes)`;
         document.getElementById('toolsToggle')?.setAttribute('aria-expanded', 'false');
       }
     } catch (e) {}
-    if (window.innerWidth <= 820) {
-      document.getElementById('sidebar')?.classList.add('collapsed');
-      const openBtn = document.getElementById('openSidebarBtn');
-      if (openBtn) openBtn.style.display = 'flex';
-    }
+    syncLayoutMode();
     try {
       const lastTab = localStorage.getItem('argon_last_tab');
       if (lastTab && lastTab !== 'chat' && document.getElementById('tab-' + lastTab)) {
@@ -5928,11 +6032,36 @@ print("Primes < 50:", primes)`;
       }
       updateComposerMeta();
     }
+    /* ---------- one rail for every device ----------
+       Phone (<=820px): the rail is a drawer that starts closed and is opened by ☰.
+       Tablet / laptop / desktop: it is a permanent panel. Crossing the breakpoint (rotate,
+       resize, fold/unfold, split-screen) must never leave the desktop `width:0` state on a
+       phone — that is what used to eat taps — nor a dark overlay stuck over the page. */
+    function syncLayoutMode() {
+      const phone = window.innerWidth <= 820;
+      if (phone === layoutPhone) return;
+      layoutPhone = phone;
+      const sb = document.getElementById('sidebar');
+      const overlay = document.getElementById('sidebarOverlay');
+      const openBtn = document.getElementById('openSidebarBtn');
+      if (sb) {
+        sb.classList.toggle('collapsed', phone);   // phone: closed drawer, desktop: open panel
+        sb.style.removeProperty('margin-left');
+      }
+      if (overlay) overlay.classList.remove('show');
+      document.body.classList.remove('sidebar-open');
+      if (openBtn) openBtn.style.display = phone ? 'flex' : 'none';
+      if (typeof updateScrollFab === 'function') updateScrollFab();
+      try { localStorage.setItem('argon_layout', phone ? 'phone' : 'desktop'); } catch (e) {}
+    }
     window.addEventListener('resize', () => {
+      syncLayoutMode();
       const overlay = document.getElementById('sidebarOverlay');
       if (window.innerWidth > 820 && overlay) overlay.classList.remove('show');
       updateScrollFab();
     });
+    window.addEventListener('orientationchange', () => setTimeout(syncLayoutMode, 120));
+    syncLayoutMode();
 
   </script>
 </body>
