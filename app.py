@@ -1028,10 +1028,14 @@ HTML_UI = r"""<!DOCTYPE html>
     .sidebar {
       width: 272px;
       background:
-        linear-gradient(180deg, rgba(16,185,129,.05), transparent 22%),
-        linear-gradient(180deg, rgba(6,10,16,.96), rgba(6,10,16,.99));
+        linear-gradient(180deg, rgba(16,185,129,.045), transparent 22%),
+        #0a0e13;                       /* opaque: no backdrop-filter, so nothing bleeds through */
       border-right: 1px solid var(--border-subtle);
-      backdrop-filter: blur(18px) saturate(120%);
+      isolation: isolate;              /* keep the page grain/vignette out of this panel */
+      -webkit-font-smoothing: antialiased;
+      letter-spacing: normal;
+      text-rendering: auto;            /* optimizeLegibility shifts glyph spacing at 1x */
+      -webkit-text-size-adjust: 100%;
     }
     .sidebar-header { padding: 14px 12px 10px; gap: 8px; align-items: center; }
     .sidebar-brand {
@@ -1107,7 +1111,7 @@ HTML_UI = r"""<!DOCTYPE html>
     .card {
       background: linear-gradient(180deg, rgba(148,163,184,.07), rgba(148,163,184,.03));
       border: 1px solid var(--border-subtle); border-radius: var(--radius);
-      padding: 11px 12px; backdrop-filter: blur(6px);
+      padding: 11px 12px;                    /* no backdrop-filter: cards sit on an opaque panel */
     }
     .card-label { font-size: .66rem; letter-spacing: .12em; text-transform: uppercase; color: var(--text-muted); }
     .metric { font-variant-numeric: tabular-nums; font-weight: 700; }
@@ -1444,7 +1448,7 @@ HTML_UI = r"""<!DOCTYPE html>
 
     .sidebar-overlay {
       position: fixed; inset: 0; z-index: 90; display: none;
-      background: rgba(3,7,12,.6); backdrop-filter: blur(2px);
+      background: rgba(3,7,12,.66);
     }
     .sidebar-overlay.show { display: block; }
 
@@ -1482,7 +1486,7 @@ HTML_UI = r"""<!DOCTYPE html>
     .models-modal {
       position: fixed; inset: 0; z-index: 500; display: none;
       align-items: center; justify-content: center; padding: 20px;
-      background: rgba(3,7,12,.72); backdrop-filter: blur(6px);
+      background: rgba(3,7,12,.78);
     }
     .models-modal.open { display: flex; }
     .models-panel {
