@@ -1921,6 +1921,25 @@ HTML_UI = r"""<!DOCTYPE html>
       .sidebar .system-strip { padding: 7px 9px; gap: 4px; }
     }
 
+    /* ---------- sidebar bottom actions ---------- */
+    .sidebar-actions {
+      display: flex; flex-direction: column; gap: 2px;
+      margin: 6px 6px 0; padding-top: 6px; border-top: 1px solid var(--border-subtle);
+    }
+    .sidebar-action {
+      display: flex; align-items: center; gap: 9px; width: 100%;
+      padding: 8px 9px; border-radius: 9px; cursor: pointer;
+      background: transparent; border: 1px solid transparent;
+      color: #c3d2e0; font-family: inherit; font-size: .8rem; font-weight: 700;
+      text-align: left; transition: background .15s ease, color .15s ease;
+    }
+    .sidebar-action:hover { background: rgba(148,163,184,.12); color: #fff; }
+    .sidebar-action .sa-icon { font-size: .95rem; line-height: 1; }
+    .sidebar-action .sa-hint {
+      margin-left: auto; font-size: .62rem; font-weight: 600; color: #7b8b9c;
+      font-family: var(--font-mono);
+    }
+
     /* ---------- top tool strip (ChatGPT-style) ---------- */
     .tool-strip {
       display: flex; align-items: center; gap: 3px;
@@ -2084,7 +2103,7 @@ HTML_UI = r"""<!DOCTYPE html>
     }
     .agent-send:disabled { opacity: .5; cursor: progress; }
 
-    @media (max-width: 1180px) {
+    @media (max-width: 1340px) {
       .tool-strip-btn .label { display: none; }
       .tool-strip { flex: 0 1 auto; }
       .tool-strip-btn { padding: 5px 7px; }
@@ -2162,6 +2181,17 @@ HTML_UI = r"""<!DOCTYPE html>
     </div>
 
 
+    <div class="sidebar-actions">
+      <button class="sidebar-action" onclick="openSettings()" title="Settings &amp; benchmark (Ctrl+,)">
+        <span class="sa-icon" aria-hidden="true">⚙️</span><span>Settings</span>
+        <span class="sa-hint">Ctrl+,</span>
+      </button>
+      <button class="sidebar-action" onclick="openModels()" title="Manage local models">
+        <span class="sa-icon" aria-hidden="true">🧠</span><span>Models</span>
+        <span class="sa-hint">local</span>
+      </button>
+    </div>
+
     <div class="system-strip" onclick="openModels()" title="Manage models &amp; storage">
       <div class="ss-row"><span>SSD ROM</span><strong id="romSize">0.00 MB</strong></div>
       <div class="progress-bar"><div class="progress-fill" id="romProgress"></div></div>
@@ -2188,15 +2218,19 @@ HTML_UI = r"""<!DOCTYPE html>
       </div>
       <span class="top-chip" id="demoChip" style="display:none;" title="No GGUF installed — replies are simulated locally">🧪 Demo</span>
       <nav class="tool-strip" aria-label="Tools">
+        <button class="tool-strip-btn active" data-tab="chat" onclick="switchTab('chat')" title="Chat">💬<span class="label">Chat</span></button>
+        <button class="tool-strip-btn new" onclick="newChat()" title="New chat (Ctrl+Shift+O)">＋<span class="label">New</span></button>
+        <span class="strip-sep" aria-hidden="true"></span>
         <button class="tool-strip-btn" data-tab="ide" onclick="switchTab('ide'); ideInit();" title="Code IDE + agent">⌨️<span class="label">IDE</span></button>
         <button class="tool-strip-btn" data-tab="gallery" onclick="switchTab('gallery'); loadGallery();" title="Image gallery">🎨<span class="label">Gallery</span></button>
         <button class="tool-strip-btn" data-tab="editor" onclick="switchTab('editor'); loadEditorPicker();" title="Image editor">🖌️<span class="label">Editor</span></button>
         <button class="tool-strip-btn" data-tab="security" onclick="switchTab('security')" title="Security lab">🛡️<span class="label">Security</span></button>
         <button class="tool-strip-btn" data-tab="benchmark" onclick="switchTab('benchmark'); loadBenchmarkModels();" title="Benchmark">⚡<span class="label">Bench</span></button>
         <button class="tool-strip-btn" data-tab="video" onclick="switchTab('video'); loadVideoStudio();" title="Video studio">🎬<span class="label">Video</span></button>
+        <span class="strip-sep" aria-hidden="true"></span>
+        <button class="tool-strip-btn" id="settingsBtn" onclick="openSettings()" title="Settings &amp; benchmark (Ctrl+,)">⚙️<span class="label">Settings</span></button>
       </nav>
       <span class="topbar-spacer"></span>
-      <button class="chip-btn" id="settingsBtn" onclick="openSettings()" title="Settings &amp; benchmark (Ctrl+,)">⚙️ <span class="t-label">Settings</span></button>
       <button class="chip-btn accent" onclick="openModels()" title="Models &amp; storage">🧠 <span class="t-label">Models</span></button>
       <button class="chip-btn" id="offlineModeBtn" onclick="toggleOfflineMode()" title="Offline mode">✈️ <span class="t-label">Offline</span></button>
     </header>
@@ -5095,7 +5129,7 @@ print("Primes < 50:", primes)`;
       if (!existing) {
         const res = await fetch('/api/ide/files', { method: 'POST', headers: {'Content-Type':'application/json'}, body: JSON.stringify({ action:'read', path }) });
         const data = await res.json();
-        if (data.error) return alert(data.error);
+        if (data.error) { toast(data.error, 'err'); return; }
         ideOpenTabs.push({ path, name, content: data.content, dirty: false });
       }
       ideActivePath = path;

@@ -124,12 +124,15 @@ static checks actually found.
 
 ## UI & UX
 
-- **Tool strip (top bar)**: ChatGPT-style switcher — IDE, Gallery, Editor, Security,
-  Benchmark, Video — with the active tool highlighted. Chat and New chat are deliberately
-  *not* in the strip (the ✦ brand returns to chat, the sidebar creates a new one). Labels
-  collapse to icons under 1180 px so nothing is clipped.
-- **⚙️ Settings** (top bar, or `Ctrl+,`): **Benchmark** (accuracy cards, latency, all 18
-  checks with pass/fail rows and a re-run button), **Engine** (active brain, topics,
+- **Tool strip (top bar)**: ChatGPT-style row — 💬 Chat · ＋ New · ⌨️ IDE · 🎨 Gallery ·
+  🖌️ Editor · 🛡️ Security · ⚡ Bench · 🎬 Video · ⚙️ Settings — with the active tool
+  highlighted. It scrolls horizontally and collapses to icons under 1340 px, so nothing
+  is ever clipped.
+- **Sidebar (ChatGPT layout)**: brand row, then **＋ New chat** at the top, chat search and
+  **Recent chats** in the middle, and **⚙️ Settings / 🧠 Models** pinned at the bottom above
+  the storage readout.
+- **⚙️ Settings** (top strip, sidebar, or `Ctrl+,`): **Benchmark** (accuracy cards, latency,
+  all 18 checks with pass/fail rows and a re-run button), **Engine** (active brain, topics,
   recipes, memory facts, measured latency) and **Workspace** (ROM database path and size,
   rows, free disk, storage guard, harvester state).
 - **Sandbox** is no longer a top-level tool: it opens from the IDE's terminal header,
