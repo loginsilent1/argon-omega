@@ -1,20 +1,5 @@
-﻿models/
-bin/
-ssd_kv_cache/
-ssd_images/
-gallery/
-import_to_rom/
-__pycache__/
-.cache/
+﻿# Only ignore multi-GB AI models (downloaded via download_models.ps1)
+models/
 *.gguf
 *.part
 *.safetensors
-*.bin
-*.exe
-*.dll
-*.db
-*.sqlite
-*.mp4
-*.png
-*.jpg
-err_llama.txt
