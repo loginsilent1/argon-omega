@@ -899,10 +899,15 @@ HTML_UI = r"""<!DOCTYPE html>
       resize: vertical;
     }
 
-    @media (max-width: 768px) {
+    @media (max-width: 820px) {
       body { height: 100dvh; }
       .suggestion-grid, .lab-container { grid-template-columns: 1fr; }
-      .sidebar { position: fixed; left: 0; top: 0; bottom: 0; z-index: 100; width: 82vw; max-width: 300px; box-shadow: 4px 0 24px rgba(0,0,0,0.6); }
+      .sidebar {
+        position: fixed; left: 0; top: 0; bottom: 0; z-index: 130;
+        width: 82vw; max-width: 300px; box-shadow: 4px 0 24px rgba(0,0,0,0.6);
+        pointer-events: auto;
+      }
+      .sidebar.collapsed { pointer-events: none; }
       .sidebar.collapsed { transform: translateX(-100%); margin-left: 0 !important; }
       .topbar { padding: 8px 10px; gap: 6px; flex-wrap: wrap; }
       .topbar-controls { gap: 6px !important; }
@@ -1011,7 +1016,11 @@ HTML_UI = r"""<!DOCTYPE html>
       position: fixed; inset: 0; z-index: 0; pointer-events: none;
       background: radial-gradient(120% 90% at 50% 0%, transparent 52%, rgba(2,6,12,.55) 100%);
     }
-    .sidebar, .main { position: relative; z-index: 1; }
+    .main { position: relative; z-index: 1; }
+    /* desktop panel sits above the page grain; the phone drawer overrides both with !important */
+    @media (min-width: 821px) {
+      .sidebar { position: relative; z-index: 1; }
+    }
 
     ::selection { background: rgba(16,185,129,.32); color: #f8fffb; }
     * { scrollbar-width: thin; scrollbar-color: rgba(148,163,184,.32) transparent; }
@@ -1448,7 +1457,7 @@ HTML_UI = r"""<!DOCTYPE html>
     .scroll-fab:hover { transform: translateY(-2px); background: rgba(16,185,129,.2); }
 
     .sidebar-overlay {
-      position: fixed; inset: 0; z-index: 90; display: none;
+      position: fixed; inset: 0; z-index: 110; display: none;
       background: rgba(3,7,12,.66);
     }
     .sidebar-overlay.show { display: block; }
@@ -2196,6 +2205,19 @@ HTML_UI = r"""<!DOCTYPE html>
     @media (max-width: 900px) {
       .agent-mode { font-size: .64rem; padding: 5px 3px; }
       .agent-pane { padding: 6px; }
+    }
+
+    /* ---------- mobile drawer (last word: it must win over the desktop panel rules) ---------- */
+    @media (max-width: 820px) {
+      .sidebar {
+        position: fixed !important; top: 0; bottom: 0; left: 0;
+        width: min(86vw, 320px) !important; max-width: 320px;
+        z-index: 130 !important; pointer-events: auto;
+        box-shadow: 4px 0 24px rgba(0,0,0,.6);
+      }
+      .sidebar.collapsed { transform: translateX(-100%); pointer-events: none; }
+      .sidebar-overlay { z-index: 120; }
+      body.sidebar-open { overflow: hidden; }
     }
 
     /* ---------- mobile ---------- */
@@ -3087,8 +3109,8 @@ HTML_UI = r"""<!DOCTYPE html>
       }
 
 
-
-    renderHistory();
+      renderHistory();
+      closeSidebarOnMobile();
     }
 
     function saveMessageToHistory(role, text, badge = '', imageUrl = null, targetChatId = null) {
