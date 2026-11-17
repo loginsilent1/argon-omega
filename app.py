@@ -1879,6 +1879,48 @@ HTML_UI = r"""<!DOCTYPE html>
       #sandboxEditor, #sandboxLineNums { font-size: .74rem; }
     }
 
+    /* ---------- v3.2 sidebar layout guard ----------
+       The sidebar is a column flex container. Base-theme rules (`.btn-new-chat`,
+       `.history-list` both `flex: 1`) made every section fight for height, so the
+       tool buttons kept their min-height and painted over the New chat row and the
+       chat delete buttons. Only the chat list may grow; everything else is fixed. */
+    .sidebar { overflow-x: hidden; overflow-y: auto; overscroll-behavior: contain; }
+    .sidebar > * { flex: 0 0 auto; }
+    .sidebar > .history-list { flex: 1 1 auto; min-height: 54px; max-height: 38vh; }
+    .sidebar > .tool-nav,
+    .sidebar > .system-strip,
+    .sidebar > .archive-block,
+    .sidebar > .sidebar-foot { position: relative; z-index: 1; }
+
+    .sidebar .btn-new-chat.compact {
+      flex: 0 0 auto; width: 100%; height: 32px;
+      margin: 0; align-self: stretch; justify-content: center;
+    }
+    .sidebar .sidebar-search { margin: 0; }
+    .sidebar .sidebar-section-header { padding: 0 2px; }
+    .sidebar .archive-block { margin: 0; }
+    .sidebar .tool-nav { margin: 0; padding-top: 8px; gap: 2px; }
+    .sidebar .tool-nav .sidebar-section-title { padding: 0 8px 2px; }
+    .sidebar .tool-nav-btn {
+      flex: 0 0 auto; min-height: 30px; padding: 5px 8px;
+      font-size: .775rem; gap: 8px;
+    }
+    .sidebar .tool-nav-btn .label {
+      overflow: hidden; text-overflow: ellipsis; white-space: nowrap;
+    }
+    .sidebar .system-strip { margin: 0; }
+    .sidebar .sidebar-foot { padding: 8px 2px 0; margin-top: 0; }
+    .sidebar .history-item { position: relative; flex: 0 0 auto; }
+    .sidebar .history-actions { flex: 0 0 auto; }
+
+    @media (max-height: 720px) {
+      .sidebar { gap: 7px; padding: 10px; }
+      .sidebar .tool-nav-btn { min-height: 27px; padding: 4px 8px; font-size: .74rem; }
+      .sidebar .tool-nav .sidebar-section-title { display: none; }
+      .sidebar > .history-list { max-height: 26vh; }
+      .sidebar .system-strip { padding: 7px 9px; gap: 4px; }
+    }
+
     /* ---------- mobile ---------- */
     @media (max-width: 900px) {
       .sandbox-body { grid-template-columns: 1fr; }
@@ -1947,29 +1989,29 @@ HTML_UI = r"""<!DOCTYPE html>
 
     <nav class="tool-nav" aria-label="Tools">
       <div class="sidebar-section-title">Tools</div>
-      <button class="tool-nav-btn active" data-tab="chat" onclick="switchTab('chat', this)">
-        <span class="ico" aria-hidden="true">💬</span>Chat
+      <button class="tool-nav-btn active" data-tab="chat" onclick="switchTab('chat', this)" title="Chat">
+        <span class="ico" aria-hidden="true">💬</span><span class="label">Chat</span>
       </button>
-      <button class="tool-nav-btn" data-tab="sandbox" onclick="switchTab('sandbox', this)">
-        <span class="ico" aria-hidden="true">🧪</span>Sandbox &amp; Terminal
+      <button class="tool-nav-btn" data-tab="sandbox" onclick="switchTab('sandbox', this)" title="Sandbox &amp; terminal">
+        <span class="ico" aria-hidden="true">🧪</span><span class="label">Sandbox</span>
       </button>
-      <button class="tool-nav-btn" data-tab="ide" onclick="switchTab('ide', this); ideInit();">
-        <span class="ico" aria-hidden="true">⌨️</span>Code IDE
+      <button class="tool-nav-btn" data-tab="ide" onclick="switchTab('ide', this); ideInit();" title="Code IDE">
+        <span class="ico" aria-hidden="true">⌨️</span><span class="label">IDE</span>
       </button>
-      <button class="tool-nav-btn" data-tab="gallery" onclick="switchTab('gallery', this); loadGallery();">
-        <span class="ico" aria-hidden="true">🎨</span>Image gallery
+      <button class="tool-nav-btn" data-tab="gallery" onclick="switchTab('gallery', this); loadGallery();" title="Image gallery">
+        <span class="ico" aria-hidden="true">🎨</span><span class="label">Gallery</span>
       </button>
-      <button class="tool-nav-btn" data-tab="editor" onclick="switchTab('editor', this); loadEditorPicker();">
-        <span class="ico" aria-hidden="true">🖌️</span>Image editor
+      <button class="tool-nav-btn" data-tab="editor" onclick="switchTab('editor', this); loadEditorPicker();" title="Image editor">
+        <span class="ico" aria-hidden="true">🖌️</span><span class="label">Editor</span>
       </button>
-      <button class="tool-nav-btn" data-tab="security" onclick="switchTab('security', this)">
-        <span class="ico" aria-hidden="true">🛡️</span>Security lab
+      <button class="tool-nav-btn" data-tab="security" onclick="switchTab('security', this)" title="Security lab">
+        <span class="ico" aria-hidden="true">🛡️</span><span class="label">Security</span>
       </button>
-      <button class="tool-nav-btn" data-tab="benchmark" onclick="switchTab('benchmark', this); loadBenchmarkModels();">
-        <span class="ico" aria-hidden="true">⚡</span>Benchmark
+      <button class="tool-nav-btn" data-tab="benchmark" onclick="switchTab('benchmark', this); loadBenchmarkModels();" title="Benchmark">
+        <span class="ico" aria-hidden="true">⚡</span><span class="label">Benchmark</span>
       </button>
-      <button class="tool-nav-btn" data-tab="video" onclick="switchTab('video', this); loadVideoStudio();">
-        <span class="ico" aria-hidden="true">🎬</span>Video studio
+      <button class="tool-nav-btn" data-tab="video" onclick="switchTab('video', this); loadVideoStudio();" title="Video studio">
+        <span class="ico" aria-hidden="true">🎬</span><span class="label">Video</span>
       </button>
     </nav>
 
