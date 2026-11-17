@@ -42,6 +42,8 @@ HOST = "0.0.0.0"
 PORT = 8080
 BOOT_ID = str(time.time())
 TERMINAL_CWD = os.path.expanduser("~")
+# Deep-linkable screens — every tool, chat and settings has its own URL.
+SPA_ROUTES = {"/chat", "/ide", "/gallery", "/editor", "/video", "/benchmark", "/sandbox", "/settings", "/models"}
 LLAMA_UPDATE_STATUS = {"running": False, "message": "llama.cpp updater idle"}
 QUANTUM_MODE = {"enabled": True}
 init_code_vault()
@@ -2211,6 +2213,17 @@ HTML_UI = r"""<!DOCTYPE html>
       .agent-pane { padding: 6px; }
     }
 
+    /* ---------- icon-only bottom row + smaller type ---------- */
+    .sidebar-actions .sidebar-action.icon-only {
+      flex: 1 1 0; justify-content: center; min-height: 36px; padding: 4px;
+      font-size: 1.02rem; color: #a9bacb;
+    }
+    .sidebar-actions .sidebar-action.icon-only:hover { color: #fff; background: rgba(148,163,184,.16); }
+    html { font-size: 15px; }
+    .history-item-title, .tools-item, .sidebar-action { letter-spacing: 0; }
+    .set-card-value { font-size: .96rem; }
+    .welcome-sub { font-size: .78rem; }
+
     /* ---------- compact layout ---------- */
     :root { --sidebar-w: 248px; }
     .topbar { padding: 6px 12px; gap: 8px; min-height: 46px; }
@@ -2364,24 +2377,12 @@ HTML_UI = r"""<!DOCTYPE html>
 
 
     <div class="sidebar-actions">
-      <button class="sidebar-action" onclick="openSettings()" title="Settings &amp; benchmark (Ctrl+,)">
-        <span class="sa-icon" aria-hidden="true">⚙️</span><span>Settings</span>
-        <span class="sa-hint">Ctrl+,</span>
+      <button class="sidebar-action icon-only" onclick="openSettings()" title="Settings &amp; benchmark (Ctrl+,)" aria-label="Settings">
+        <span class="sa-icon" aria-hidden="true">⚙️</span>
       </button>
-      <button class="sidebar-action" onclick="openModels()" title="Manage local models">
-        <span class="sa-icon" aria-hidden="true">🧠</span><span>Models</span>
-        <span class="sa-hint">local</span>
+      <button class="sidebar-action icon-only" onclick="openModels()" title="Models &amp; storage" aria-label="Models">
+        <span class="sa-icon" aria-hidden="true">🧠</span>
       </button>
-    </div>
-
-    <div class="system-strip" onclick="openModels()" title="Manage models &amp; storage">
-      <div class="ss-row"><span>SSD ROM</span><strong id="romSize">0.00 MB</strong></div>
-      <div class="progress-bar"><div class="progress-fill" id="romProgress"></div></div>
-      <div class="ss-row">
-        <span class="engine"><span class="engine-dot" id="engineDot"></span><span id="engineState">checking…</span></span>
-        <span id="totalRows">Brains: 0</span>
-      </div>
-      <div class="ss-row"><span id="engineDetail" style="font-size:.62rem;">—</span></div>
     </div>
 
     <div class="sidebar-foot">
@@ -2918,7 +2919,65 @@ HTML_UI = r"""<!DOCTYPE html>
       try { localStorage.setItem('argon_tools_open', open ? '1' : '0'); } catch (e) {}
     }
 
-    function switchTab(name, btn) {
+    let modelsPoll = null;   // hoisted: /models can be applied during boot
+    const TAB_URL = {
+      chat: '/chat', ide: '/ide', gallery: '/gallery', editor: '/editor',
+      video: '/video', benchmark: '/benchmark', sandbox: '/sandbox'
+    };
+    const URL_TAB = Object.fromEntries(Object.entries(TAB_URL).map(([k, v]) => [v, k]));
+    const NAV_TITLE = {
+      chat: 'Chat', ide: 'Code IDE', gallery: 'Gallery', editor: 'Image editor',
+      video: 'Video studio', benchmark: 'Benchmark', sandbox: 'Sandbox'
+    };
+    let routeSilent = false;
+
+    function pushRoute(path, replace = false) {
+      if (routeSilent) return;
+      if (location.pathname + location.search === path) return;
+      try {
+        history[replace ? 'replaceState' : 'pushState']({ path }, '', path);
+      } catch (e) {}
+    }
+
+    function setDocTitle(label) {
+      document.title = label ? `ARGON-OMEGA · ${label}` : 'ARGON-OMEGA | Offline AI';
+    }
+
+    function currentTabName() {
+      const active = document.querySelector('.tab-view.active');
+      return active ? active.id.replace('tab-', '') : 'chat';
+    }
+
+    function applyRoute() {
+      const path = location.pathname.replace(/\/$/, '') || '/';
+      const params = new URLSearchParams(location.search);
+      if (path === '/settings') {
+        const pane = params.get('tab') || 'benchmark';
+        switchTab(currentTabName(), null, { silent: true });
+        openSettings(pane, { silent: true });
+        setDocTitle('Settings');
+        return;
+      }
+      if (path === '/models') {
+        switchTab(currentTabName(), null, { silent: true });
+        openModels({ silent: true });
+        setDocTitle('Models');
+        return;
+      }
+      // only touch the modals when they are actually open: their helpers live further down
+      if (document.getElementById('settingsModal')?.classList.contains('open')) closeSettings({ silent: true });
+      if (document.getElementById('modelsModal')?.classList.contains('open')) closeModels({ silent: true });
+      const tab = URL_TAB[path];
+      if (tab) {
+        switchTab(tab, null, { silent: true });
+        setDocTitle(NAV_TITLE[tab]);
+      } else {
+        setDocTitle('');
+      }
+    }
+
+    function switchTab(name, btn, opts) {
+      const silent = !!(opts && opts.silent) || routeSilent;
       document.querySelectorAll('.tab-view').forEach(el => el.classList.remove('active'));
       document.querySelectorAll('.tool-nav-btn, .tool-strip-btn, .side-tool, .tools-item').forEach(el => {
         el.classList.remove('active');
@@ -2945,6 +3004,10 @@ HTML_UI = r"""<!DOCTYPE html>
       if (name === 'sandbox') setTimeout(sandboxUpdateLineNums, 0);
       if (window.innerWidth <= 820) closeSidebarOnMobile();
       try { localStorage.setItem('argon_last_tab', name); } catch (e) {}
+      if (!silent) {
+        pushRoute(TAB_URL[name] || '/chat');
+        setDocTitle(NAV_TITLE[name] || '');
+      }
     }
 
     function historyAction(label, title, handler, kind) {
@@ -4382,7 +4445,7 @@ print("Primes < 50:", primes)`;
           grid.innerHTML = data.models.map(m => `
             <div class="lab-panel" style="padding:14px;">
               <div style="font-weight:700;color:#38bdf8;">${m.tier} — ${m.filename}</div>
-              <div class="sub-metric">SSD Size: ${m.size}</div>
+              <div class="sub-metric">Size: ${m.size}</div>
             </div>`).join('');
         }
       } catch (e) {}
@@ -4403,7 +4466,7 @@ print("Primes < 50:", primes)`;
       grid.innerHTML = (data.results || []).map(r => `
         <div class="lab-panel" style="padding:14px;">
           <div style="font-weight:800;color:#38bdf8;margin-bottom:6px;">${r.tier} — ${r.filename}</div>
-          <div class="sub-metric">SSD Size: ${r.size}</div>
+          <div class="sub-metric">Size: ${r.size}</div>
           <div style="margin:6px 0;font-size:0.85rem;">⚡ TTFT: <strong>${r.ttft_ms}ms</strong> • 🚀 ${
             r.demo ? 'Speed: <strong>instant</strong> (template, not tokens)' :
             `Speed: <strong>${r.tok_per_sec} tok/s</strong> • ⏱️ ${r.ms_per_token} ms/tok`}</div>
@@ -4887,21 +4950,28 @@ print("Primes < 50:", primes)`;
     /* ---------------- settings (benchmark / engine / workspace) ---------------- */
     let settingsLoadedAt = 0;
 
-    function openSettings(pane = 'benchmark') {
+    function openSettings(pane = 'benchmark', opts) {
       const modal = document.getElementById('settingsModal');
       if (!modal) return;
       modal.classList.add('open');
       document.body.classList.add('modal-open');
       settingsTab(pane);
       loadSettings(true);
-      setTimeout(() => document.getElementById('settingsBtn')?.focus(), 40);
+      if (!(opts && opts.silent)) {
+        pushRoute('/settings?tab=' + encodeURIComponent(pane));
+        setDocTitle('Settings');
+      }
     }
 
-    function closeSettings() {
+    function closeSettings(opts) {
       const modal = document.getElementById('settingsModal');
       if (!modal) return;
       modal.classList.remove('open');
       document.body.classList.remove('modal-open');
+      if (!(opts && opts.silent)) {
+        pushRoute(TAB_URL[currentTabName()] || '/chat');
+        setDocTitle(NAV_TITLE[currentTabName()] || '');
+      }
     }
 
     function settingsTab(pane) {
@@ -4914,6 +4984,9 @@ print("Primes < 50:", primes)`;
         sec.classList.toggle('active', sec.id === 'setPane-' + pane);
       });
       document.querySelector('.settings-panel')?.classList.toggle('wide', pane === 'security');
+      if (document.getElementById('settingsModal')?.classList.contains('open')) {
+        pushRoute('/settings?tab=' + encodeURIComponent(pane), true);
+      }
     }
 
     function setRow(label, value) {
@@ -5416,8 +5489,18 @@ print("Primes < 50:", primes)`;
     }
     try {
       const lastTab = localStorage.getItem('argon_last_tab');
-      if (lastTab && lastTab !== 'chat' && document.getElementById('tab-' + lastTab)) switchTab(lastTab);
+      if (lastTab && lastTab !== 'chat' && document.getElementById('tab-' + lastTab)) {
+        routeSilent = true;
+        switchTab(lastTab, null, { silent: true });
+        routeSilent = false;
+      }
     } catch (e) {}
+    // Deep links win over the remembered tab: /ide, /settings?tab=security, /models …
+    try { applyRoute(); } catch (e) {}
+    window.addEventListener('popstate', () => {
+      routeSilent = true;
+      try { applyRoute(); } finally { routeSilent = false; }
+    });
     openChatFromHash();
     setInterval(fetchTelemetry, 2000);
     initUiExtras();
@@ -5547,21 +5630,28 @@ print("Primes < 50:", primes)`;
     function openModelHelp() { openModels(); }
 
     /* ---------------- models panel ---------------- */
-    let modelsPoll = null;
 
-    function openModels() {
+    function openModels(opts) {
       const modal = document.getElementById('modelsModal');
       if (!modal) return;
       modal.classList.add('open');
       refreshModels();
       if (modelsPoll) clearInterval(modelsPoll);
       modelsPoll = setInterval(refreshModels, 2500);
+      if (!(opts && opts.silent)) {
+        pushRoute('/models');
+        setDocTitle('Models');
+      }
     }
 
-    function closeModels() {
+    function closeModels(opts) {
       const modal = document.getElementById('modelsModal');
       if (modal) modal.classList.remove('open');
       if (modelsPoll) { clearInterval(modelsPoll); modelsPoll = null; }
+      if (!(opts && opts.silent)) {
+        pushRoute(TAB_URL[currentTabName()] || '/chat');
+        setDocTitle(NAV_TITLE[currentTabName()] || '');
+      }
     }
 
     async function refreshModels() {
@@ -5854,7 +5944,10 @@ class ArgonHandler(BaseHTTPRequestHandler):
             return {}
 
     def do_GET(self) -> None:
-        if self.path == "/" or self.path == "/index.html":
+        route = self.path.split("?", 1)[0]
+        if len(route) > 1:
+            route = route.rstrip("/")
+        if route in ("", "/", "/index.html") or route in SPA_ROUTES:
             body = HTML_UI.encode("utf-8")
             self.send_response(200)
             self.send_header("Content-Type", "text/html; charset=utf-8")

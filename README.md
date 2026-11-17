@@ -144,8 +144,17 @@ static checks actually found.
   `touch-action: manipulation` kills the 300 ms double-tap delay.
 - Tapping any row in the sidebar opens that conversation and keeps it highlighted, even
   when the chat is still empty.
+- **Every screen has its own URL** and is deep-linkable, with back/forward working:
+  `/chat`, `/ide`, `/gallery`, `/editor`, `/video`, `/benchmark`, `/sandbox`,
+  `/settings?tab=benchmark|engine|security|workspace` and `/models`. The title follows the
+  screen (`ARGON-OMEGA · Code IDE`), switching a screen pushes a history entry, and the
+  server answers those paths with the same single-file app (unknown paths still 404).
 - **Top bar is minimal**: brand, demo chip and the offline toggle only — Models and Settings
-  are not up there any more, they live in the sidebar (and `Ctrl+,`).
+  are not up there any more.
+- **Sidebar bottom is two icon buttons** (⚙️ Settings, 🧠 Models) with tooltips/aria-labels,
+  and the SSD ROM / engine readout block is gone from the sidebar (engine + storage facts
+  live in Settings → Engine / Workspace).
+- Type scale is one notch smaller (`html { font-size: 15px }`).
 - **Compact scale**: 248 px sidebar, 46 px top bar, 42 px New chat, 44 px history rows,
   40 px tool rows, 760 px chat column/composer and a 780 px Settings panel (940 px for the
   security lab) — denser without dropping below comfortable touch targets.
