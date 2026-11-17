@@ -1953,6 +1953,9 @@ HTML_UI = r"""<!DOCTYPE html>
       <button class="tool-nav-btn" data-tab="sandbox" onclick="switchTab('sandbox', this)">
         <span class="ico" aria-hidden="true">🧪</span>Sandbox &amp; Terminal
       </button>
+      <button class="tool-nav-btn" data-tab="ide" onclick="switchTab('ide', this); ideInit();">
+        <span class="ico" aria-hidden="true">⌨️</span>Code IDE
+      </button>
       <button class="tool-nav-btn" data-tab="gallery" onclick="switchTab('gallery', this); loadGallery();">
         <span class="ico" aria-hidden="true">🎨</span>Image gallery
       </button>
