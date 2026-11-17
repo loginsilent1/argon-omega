@@ -46,23 +46,32 @@ routes each prompt to one of three things it can actually do:
   conversion (km/mi, kg/lb, °C/°F), SHA-256, base64, UUID v4, word/character counts,
   primality and factorisation, extractive summaries of pasted text, date and time —
   all executed, never guessed.
-- **Look it up.** A curated knowledge base of **44 CS/OS/web topics** (deadlock,
+- **Look it up.** A curated knowledge base of **47 CS/OS/web topics** (deadlock,
   race conditions, GIL, async, indexes, ACID, HTTP, TLS, DNS, CORS, JWT, containers,
-  Kubernetes, git rebase, RAG, embeddings, quantization, GGUF, profiling, …) written
-  as real explanations with the failure mode for each, plus automatic `X vs Y`
-  comparisons.
-- **Write working code.** **31 runnable recipes** — reverse/palindrome/FizzBuzz,
+  Kubernetes, git rebase, RAG, embeddings, quantization, GGUF, profiling, plus AI,
+  LLMs and machine learning, …) written as real explanations with the failure mode for
+  each, plus automatic `X vs Y` comparisons — including reversed phrasings like
+  *“the difference between a thread and a process”*.
+- **Write working code.** **44 runnable recipes** — reverse/palindrome/FizzBuzz,
   binary search, quicksort, prime sieve, Fibonacci, dedupe, sort-by-value, atomic
   file writes, retries with backoff, argparse, SQLite, unit tests, dataclasses,
   asyncio with bounded concurrency, HTTP with timeouts, validation, CSV/JSON, a JS
-  debounce, an HTML page, a Node server. Every Python recipe is executed by
-  `python selftest.py` and runs as-is.
+  debounce, an HTML page, a Node server — plus **LRU caches, timing decorators,
+  context managers, thread pools, token-bucket rate limiting, logging setup,
+  subprocess, env config, enums/dataclasses, TypeVar/Protocol, top-K with heapq,
+  itertools chunking and pathlib scans**. Every Python recipe is executed by
+  `python selftest.py` (40 of them) and runs as-is.
+- **Coach the work.** **6 playbooks** for the questions that are not lookups: project
+  ideas with a scope ladder, project structure, code-review order, a deliberate
+  practice plan, a five-move debugging method and a testing strategy.
 
 Also handled: **`X or Y?` decisions** (SQLite/Postgres, SQL/NoSQL, JWT/sessions,
-pytest/unittest, WebSockets/polling, monorepo/polyrepo), **traceback triage** for the
-twelve exceptions people actually hit (IndexError, KeyError, TypeError, ImportError,
-JSONDecodeError, timeouts, segfaults…), and honest scaffolding when no recipe matches —
-a real skeleton for your function name rather than an unrelated snippet.
+pytest/unittest, WebSockets/polling, monorepo/polyrepo), **traceback triage for 20
+failure modes** (IndexError, KeyError, TypeError, NameError, SyntaxError,
+IndentationError, FileNotFoundError, ModuleNotFoundError, JSONDecodeError,
+`database is locked`, `address already in use`, CORS, MemoryError, timeouts,
+segfaults…), and honest scaffolding when no recipe matches — a real skeleton for your
+function name rather than an unrelated snippet.
 
 Anything outside those refuses cleanly: it says it has no vetted answer, offers the
 topics it does cover, and points at installing a real brain — instead of padding the
@@ -72,9 +81,11 @@ reply with placeholder prose. Multi-turn follow-ups work too (*“add tests”*,
 **Speed** is measured, not simulated: answers are composed in ~1–2 ms, cached after the
 first hit, and streamed in multi-word chunks with no artificial pacing
 (`ARGON_DEMO_PACE=0.02` reintroduces a per-chunk delay if you want a demo). The Benchmark
-tab reports that measured latency plus a 12-check accuracy battery — arithmetic, units,
-fact lookup, two code recipes, two knowledge entries, a decision question, two traceback
-triage checks and one honesty check — currently **12/12** with no weights installed.
+tab reports that measured latency plus an **18-check accuracy battery** — arithmetic,
+units, fact lookup, code recipes, knowledge entries, a decision question, four traceback
+triage checks, a comparison, a coaching answer and one honesty check — currently
+**18/18** with no weights installed. The same battery, with a pass row per check, is in
+**⚙️ Settings → Benchmark**.
 
 `python selftest.py` re-runs all of it (battery, every recipe in a temp dir, follow-up
 handling, cold/warm latency) and exits non-zero on any failure.
@@ -113,9 +124,14 @@ static checks actually found.
 
 ## UI & UX
 
-- **Tool strip (top bar)**: ChatGPT-style switcher — Chat, New chat, IDE, Gallery,
-  Editor, Security, Benchmark, Video — with the active tool highlighted. It scrolls
-  horizontally on narrow screens and collapses to icons.
+- **Tool strip (top bar)**: ChatGPT-style switcher — IDE, Gallery, Editor, Security,
+  Benchmark, Video — with the active tool highlighted. Chat and New chat are deliberately
+  *not* in the strip (the ✦ brand returns to chat, the sidebar creates a new one). Labels
+  collapse to icons under 1180 px so nothing is clipped.
+- **⚙️ Settings** (top bar, or `Ctrl+,`): **Benchmark** (accuracy cards, latency, all 18
+  checks with pass/fail rows and a re-run button), **Engine** (active brain, topics,
+  recipes, memory facts, measured latency) and **Workspace** (ROM database path and size,
+  rows, free disk, storage guard, harvester state).
 - **Sandbox** is no longer a top-level tool: it opens from the IDE's terminal header,
   since the IDE terminal already covers day-to-day execution.
 

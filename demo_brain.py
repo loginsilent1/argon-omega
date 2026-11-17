@@ -1088,9 +1088,364 @@ _k("idempotency", "Idempotency",
     "Retries plus non-idempotent handlers produce double charges and duplicate emails — the classic production incident.",
     "Make handlers naturally idempotent where you can: `INSERT ... ON CONFLICT DO NOTHING`, upserts, set-to-value instead of increment."])
 
+_r("lrucache", "an LRU cache you control", r'''
+from collections import OrderedDict
+
+
+class LRUCache:
+    """Fixed-size cache that evicts the least recently used key."""
+
+    def __init__(self, capacity: int = 3) -> None:
+        self.capacity = capacity
+        self._data: OrderedDict[str, int] = OrderedDict()
+
+    def get(self, key: str):
+        if key not in self._data:
+            return None
+        self._data.move_to_end(key)          # mark as recently used
+        return self._data[key]
+
+    def put(self, key: str, value: int) -> None:
+        if key in self._data:
+            self._data.move_to_end(key)
+        self._data[key] = value
+        if len(self._data) > self.capacity:
+            self._data.popitem(last=False)   # evict the oldest entry
+
+
+cache = LRUCache(2)
+cache.put("a", 1)
+cache.put("b", 2)
+cache.get("a")            # "a" becomes the freshest entry
+cache.put("c", 3)         # evicts "b"
+print(list(cache._data))  # ['a', 'c']
+''', "`OrderedDict.move_to_end` is the whole trick: O(1) recency updates without a second linked list. For pure memoisation `@functools.lru_cache(maxsize=...)` is one line at C speed \u2014 write this class when you need TTLs, byte limits or hit/miss stats.")
+
+_r("timerdecorator", "a timing decorator that never swallows exceptions", r'''
+import functools
+import time
+
+
+def timed(fn):
+    """Print how long fn took — including when fn raises."""
+
+    @functools.wraps(fn)
+    def wrapper(*args, **kwargs):
+        started = time.perf_counter()
+        try:
+            return fn(*args, **kwargs)
+        finally:
+            print(f"{fn.__name__} took {(time.perf_counter() - started) * 1000:.2f} ms")
+
+    return wrapper
+
+
+@timed
+def work() -> int:
+    return sum(range(100_000))
+
+
+print(work())
+''', "The measurement sits in `finally`, so a crash still prints the number that matters. `functools.wraps` keeps `__name__` and the docstring, which logs, tracebacks and `help()` all rely on.")
+
+_r("contextmanager", "a context manager for setup and teardown", r'''
+import contextlib
+import time
+
+
+@contextlib.contextmanager
+def timed(label: str):
+    """with timed("build"): … — cleanup still runs on exceptions."""
+    started = time.perf_counter()
+    try:
+        yield
+    finally:
+        print(f"{label}: {(time.perf_counter() - started) * 1000:.2f} ms")
+
+
+with timed("build"):
+    total = sum(i * i for i in range(50_000))
+print(total > 0)
+''', "A generator with a single `yield`: everything before it is setup, the `finally` block is teardown. Reach for this instead of copy-pasting try/finally at every call site; use a class only when the object needs reusable state.")
+
+_r("threads", "a thread pool for blocking work", r'''
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
+
+def fetch_score(name: str) -> tuple[str, int]:
+    """Stand-in for blocking I/O: a request, a file read, a query."""
+    return name, len(name) * 10
+
+
+names = ["alpha", "beta", "gamma", "delta"]
+
+with ThreadPoolExecutor(max_workers=4) as pool:
+    futures = [pool.submit(fetch_score, n) for n in names]
+    results = [f.result() for f in as_completed(futures)]
+
+print(sorted(results))
+''', "Threads help with waiting (I/O), not with computing \u2014 the GIL means CPU-bound work gains nothing. Keep `max_workers` bounded and collect with `as_completed` so one slow task does not head-of-line block the rest.")
+
+_r("ratelimit", "a token-bucket rate limiter", r'''
+import time
+
+
+class TokenBucket:
+    """Allow `rate` calls per second with bursts up to `capacity`."""
+
+    def __init__(self, rate: float, capacity: float) -> None:
+        self.rate = rate
+        self.capacity = capacity
+        self.tokens = capacity
+        self.updated: float | None = None      # start the clock on first use
+
+    def allow(self, now: float | None = None) -> bool:
+        now = time.monotonic() if now is None else now
+        if self.updated is None:
+            self.updated = now
+        self.tokens = min(self.capacity, self.tokens + (now - self.updated) * self.rate)
+        self.updated = now
+        if self.tokens >= 1:
+            self.tokens -= 1
+            return True
+        return False
+
+
+bucket = TokenBucket(rate=2, capacity=3)
+clock = 1000.0
+print([bucket.allow(clock) for _ in range(5)])   # [True, True, True, False, False]
+print(bucket.allow(clock + 1.0))                 # True — one second refills 2 tokens
+''', "Token buckets smooth bursts; fixed windows let a caller burn the whole quota in the last millisecond. Taking the clock as a parameter makes the limiter testable without sleeping.")
+
+_r("logging", "logging that is actually usable", r'''
+import logging
+import sys
+
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s %(levelname)-7s %(name)s: %(message)s",
+    datefmt="%H:%M:%S",
+    stream=sys.stdout,
+)
+log = logging.getLogger("argon.app")
+
+log.debug("filtered out at INFO level")
+log.info("service started")
+try:
+    1 / 0
+except ZeroDivisionError:
+    log.exception("division failed")        # message + full traceback
+log.warning("queue at %d%%", 82)            # lazy formatting, not an f-string
+''', "`log.exception` inside an `except` block is the built-in way to keep a traceback. Pass arguments (`log.info(\"%s\", x)`) so disabled levels cost nothing. Never log secrets, tokens or full request bodies.")
+
+_r("subprocess", "running a command safely", r'''
+import subprocess
+import sys
+
+result = subprocess.run(
+    [sys.executable, "-c", "print(6 * 7)"],
+    capture_output=True,     # keep the child's output out of your terminal
+    text=True,               # str, not bytes
+    timeout=10,              # never let a child hang the parent
+    check=True,              # raise CalledProcessError on a non-zero exit
+)
+print(result.stdout.strip())          # 42
+''', "`shell=True` with interpolated input is command injection \u2014 pass a list of arguments. Always set `timeout`; a hung child with no timeout hangs your whole service.")
+
+_r("envconfig", "config from environment variables", r'''
+import os
+
+
+def env(name: str, default, cast=str):
+    """Read NAME, cast it, and fall back to the default when unset."""
+    raw = os.environ.get(name)
+    if raw is None or raw == "":
+        return default
+    try:
+        return cast(raw)
+    except (TypeError, ValueError):
+        raise SystemExit(f"{name} must be a {cast.__name__}, got {raw!r}")
+
+
+HOST = env("APP_HOST", "127.0.0.1")
+PORT = env("APP_PORT", 8000, int)
+DEBUG = env("APP_DEBUG", "0") in {"1", "true", "yes"}
+print(HOST, PORT, DEBUG)
+''', "Fail fast at startup with a readable message instead of crashing on line 400 of a request. Keep one module that parses all config, and never commit real secrets \u2014 `.env` plus `os.environ` is enough.")
+
+_r("enum", "enums and dataclasses instead of magic strings", r'''
+from dataclasses import dataclass, field
+from enum import Enum
+
+
+class Status(Enum):
+    QUEUED = "queued"
+    RUNNING = "running"
+    DONE = "done"
+
+
+@dataclass
+class Job:
+    name: str
+    status: Status = Status.QUEUED
+    tags: list[str] = field(default_factory=list)
+
+    def start(self) -> "Job":
+        self.status = Status.RUNNING
+        return self
+
+    @property
+    def finished(self) -> bool:
+        return self.status is Status.DONE
+
+
+job = Job("index").start()
+print(job.status.value, job.finished, job.tags)
+''', "`field(default_factory=list)` is the fix for the mutable-default bug \u2014 a bare `= []` is shared by every instance. Enum members compare by identity and cannot be typo-matched like `\"runing\"`.")
+
+_r("typing", "generic functions with TypeVar and Protocol", r'''
+from typing import Protocol, TypeVar
+
+T = TypeVar("T")
+
+
+class HasLength(Protocol):
+    def __len__(self) -> int: ...
+
+
+def longest(items: list[T], key=None) -> T:
+    """Generic: typed at the call site, unchanged at runtime."""
+    if not items:
+        raise ValueError("longest() of an empty sequence")
+    return max(items, key=key)
+
+
+def describe(value: HasLength) -> str:
+    """Structural typing: anything with __len__ fits, no inheritance needed."""
+    return f"{type(value).__name__} of length {len(value)}"
+
+
+print(longest([3, 9, 4]), longest(["a", "cccc"]))
+print(describe([1, 2, 3]), describe("abcd"))
+''', "A `Protocol` describes a shape instead of a base class, so `str`, `list` and your own type all satisfy it without inheriting. Annotations are erased at runtime \u2014 this file needs no dependency.")
+
+_r("topk", "top-K without sorting everything", r'''
+import heapq
+
+
+def top_k(items: list[int], k: int = 3) -> list[int]:
+    """O(n log k) instead of O(n log n) — matters when n is large."""
+    return heapq.nlargest(k, items)
+
+
+def kth_largest_stream(stream: list[int], k: int = 4) -> list[int]:
+    """Keep a min-heap of the k largest seen so far; its root is the k-th."""
+    heap: list[int] = []
+    out: list[int] = []
+    for value in stream:
+        heapq.heappush(heap, value)
+        if len(heap) > k:
+            heapq.heappop(heap)
+        out.append(heap[0])
+    return out
+
+
+print(top_k([5, 1, 9, 3, 7, 2], 2))
+print(kth_largest_stream([4, 10, 2, 8, 6, 1]))
+''', "`heapq.nlargest` beats `sorted(...)[:k]` when k is small. The size-k min-heap is the streaming answer: its root is the k-th largest seen so far, using O(k) memory instead of O(n).")
+
+_r("chunking", "chunking and pairing with itertools", r'''
+from itertools import islice, zip_longest
+
+
+def chunks(items, size: int = 3):
+    """Yield lists of at most `size` items — works on files and generators too."""
+    it = iter(items)
+    while batch := list(islice(it, size)):
+        yield batch
+
+
+def pairs(items: list[str]):
+    """('a','b'), ('b','c') — a sliding window of two."""
+    return list(zip(items, items[1:]))
+
+
+def padded_pairs(a: list[int], b: list[str]):
+    return list(zip_longest(a, b, fillvalue="-"))
+
+
+print(list(chunks(range(7), 3)))
+print(pairs(["a", "b", "c"]))
+print(padded_pairs([1, 2, 3], ["x", "y"]))
+''', "The walrus loop consumes the iterator exactly once, so it works on generators and file handles \u2014 `for i in range(0, len(x), size)` does not. `zip_longest` aligns sequences of different lengths cleanly.")
+
+_r("pathlib", "walking a directory with pathlib", r'''
+import tempfile
+from pathlib import Path
+
+
+def scan(root: str | Path, pattern: str = "*.py") -> list[tuple[str, int]]:
+    """Return (relative path, size) for matching files, biggest first."""
+    base = Path(root)
+    found = [(str(p.relative_to(base)), p.stat().st_size)
+             for p in base.rglob(pattern) if p.is_file()]
+    return sorted(found, key=lambda row: row[1], reverse=True)
+
+
+with tempfile.TemporaryDirectory() as tmp:
+    Path(tmp, "a.py").write_text("print(1)\n", encoding="utf-8")
+    Path(tmp, "sub").mkdir()
+    Path(tmp, "sub", "b.py").write_text("# bigger file\n" * 20, encoding="utf-8")
+    print(scan(tmp))
+''', "`rglob` removes the `os.walk` bookkeeping and `Path` keeps encoding explicit. Skip `node_modules`, `.git` and `venv` before recursing, or scanning `~` takes minutes.")
+
+_k("ai", "Artificial intelligence",
+   "Artificial intelligence is the umbrella term for computer systems that perform tasks we associate with human judgement — recognising an image, translating a sentence, choosing a next move.",
+   ["Modern AI is mostly **machine learning**: instead of writing rules, you fit parameters to examples and let the model generalise.",
+    "Three families cover almost everything in use today: supervised learning (labelled examples), unsupervised/self-supervised learning (structure in unlabelled data), and reinforcement learning (reward from interaction).",
+    "Large language models are one narrow, very strong slice: next-token prediction trained on text at scale, which turns out to support translation, summarisation, coding and reasoning-shaped tasks.",
+    "AI systems are statistical, so they fail differently from normal software: confidently wrong answers, bias inherited from data, and behaviour that drifts when the input distribution moves.",
+    "They are not magic and not conscious — a model is a fixed function of its weights; all 'learning' happens during training, not during your chat."],
+   "The dangerous failure is not an obvious crash but a plausible, fluent, wrong answer — which is why evaluation, citations and human review matter more than the demo.")
+
+_k("llm", "Large language models",
+   "A large language model is a neural network trained to predict the next token in a sequence; everything it appears to 'know' is compressed into its weights during training.",
+   ["Text is split into tokens (sub-word units), embedded as vectors, and processed by a stack of transformer blocks with self-attention.",
+    "Training has two broad phases: pre-training on huge corpora (next-token prediction) and post-training (instruction tuning + preference optimisation) that makes it follow requests.",
+    "Generation is sampling: temperature, top-p and repetition penalties decide how adventurous each next token is. Greedy decoding is deterministic but often bland.",
+    "Context window is working memory, not knowledge — the model cannot recall what is not in the prompt or its weights.",
+    "Hallucination is structural: the objective rewards fluent continuations, not truth. Retrieval and tools are how real systems ground it.",
+    "Quantisation (GGUF Q4 etc.) shrinks weights to run on a laptop, trading a little accuracy for a lot of memory — which is exactly what this studio does with local models."],
+   "Cost scales with tokens in *and* out: long prompts are not free, and the same question can produce different answers run to run once sampling is on.")
+
+_k("machine-learning", "Machine learning",
+   "Machine learning fits a model to data so it can predict on data it has not seen — the useful question is always 'will this generalise?', not 'how good is the training score?'.",
+   ["Split data into train / validation / test **before** you look at it; tuning against the test set silently turns it into training data.",
+    "Baseline first: a mean predictor or a one-rule heuristic tells you whether the model earns its complexity.",
+    "Overfitting = great on train, poor on validation. Regularisation, more data and simpler models are the levers.",
+    "Class imbalance makes accuracy meaningless — use precision/recall/F1 and look at the confusion matrix.",
+    "Leakage is the most common silent killer: a feature that contains information from the future (or from the label) makes offline scores brilliant and production useless.",
+    "Monitor drift after deployment: inputs change, and a model that was right in January can be wrong in June with no code change."],
+   "A model is only one line of a real system — features, labels, serving and monitoring are where the work and the failures live.")
+
 
 # aliases → knowledge keys (longest first so specific phrases win)
 _ALIASES: dict[str, str] = {
+    "artificial intelligence": "ai",
+    "what is ai": "ai",
+    "how does ai work": "ai",
+    "define ai": "ai",
+    "ai mean": "ai",
+    "large language model": "llm",
+    "language model": "llm",
+    "llm": "llm",
+    "chatgpt": "llm",
+    "gpt": "llm",
+    "machine learning": "machine-learning",
+    "supervised learning": "machine-learning",
+    "train a model": "machine-learning",
+    "training a model": "machine-learning",
+    "ml model": "machine-learning",
     "dead lock": "deadlock",
     "deadlock": "deadlock",
     "race condition": "race-condition",
@@ -1308,7 +1663,9 @@ _DECISIONS: list[tuple[tuple[str, str], str]] = [
 
 def _decision_reply(prompt: str) -> str | None:
     low = prompt.lower()
-    if not re.search(r"\b(or|vs\.?|versus|better|should i|which)\b", low):
+    choosing = re.search(r"\b(or|vs\.?|versus|better|should i|which)\b", low)
+    comparing = re.search(r"\bdifference between\b|\bcompare\b|\band\b.{0,40}\b(?:instead of|over|rather than)\b", low)
+    if not (choosing or comparing):
         return None
     for keywords, answer in _DECISIONS:
         if all(re.search(r"(?<![a-z0-9])" + kw + r"(?![a-z0-9])", low) for kw in keywords):
@@ -1544,6 +1901,20 @@ _CODE_INTENTS: list[tuple[tuple[str, ...], str]] = [
     (("html", "web page", "website", "landing page", "css"), "html"),
     (("directory", "folder", "scan", "large file", "disk usage"), "directory"),
     (("file", "write to disk", "read from disk", "save"), "fileio"),
+    (("lru", "lru cache", "cache", "memoize"), "lrucache"),
+    (("context manager", "with statement", "cleanup"), "contextmanager"),
+    (("decorator", "measure time", "timing", "timer", "benchmark a function"), "timerdecorator"),
+    (("thread pool", "threadpool", "threads", "concurrent"), "threads"),
+    (("rate limit", "rate limiter", "token bucket"), "ratelimit"),
+    (("logging", "log to file", "logger", "logs"), "logging"),
+    (("subprocess", "run a command", "shell command", "execute a command"), "subprocess"),
+    (("environment variable", "environment variables", "env var", "env vars", "config from env",
+      ".env", "read env", "os.environ"), "envconfig"),
+    (("enum", "enumeration"), "enum"),
+    (("typevar", "protocol", "type hints", "type annotation", "generic function", "typing"), "typing"),
+    (("top k", "top-k", "k largest", "largest k", "heapq", "most common"), "topk"),
+    (("chunk", "chunks", "batching", "batch"), "chunking"),
+    (("pathlib", "walk a directory", "find files", "list files"), "pathlib"),
 ]
 
 _LANG_HINTS = {
@@ -1552,9 +1923,23 @@ _LANG_HINTS = {
 }
 
 
+_PRIORITY_INTENTS: tuple[tuple[str, str], ...] = (
+    ("pathlib", "pathlib"),
+    ("heapq", "topk"),
+    ("functools.lru_cache", "lrucache"),
+    ("lru cache", "lrucache"),
+    ("subprocess", "subprocess"),
+    ("threadpool", "threads"),
+    ("token bucket", "ratelimit"),
+)
+
+
 def _pick_code_key(prompt: str) -> str | None:
     """Match recipe intents on word boundaries — 'profile' must not match 'file'."""
     low = prompt.lower()
+    for needle, key in _PRIORITY_INTENTS:          # explicit library names beat generic words
+        if needle in low:
+            return key
     for needles, key in _CODE_INTENTS:
         for needle in needles:
             if re.search(r"(?<![a-z0-9])" + re.escape(needle) + r"(?![a-z0-9])", low):
@@ -1587,9 +1972,11 @@ def _generic_code_reply(prompt: str) -> str:
         "- Give me the signature and constraints (*inputs, output type, edge cases*) and I'll fill it in — "
         "that's where the recipe library kicks in.",
         "",
-        "Recipes I do have ready: reverse, palindrome, FizzBuzz, binary search, quicksort, prime sieve, "
-        "Fibonacci, dedupe, sorting dicts, atomic file writes, retries, argparse, SQLite, unit tests, "
-        "dataclasses, asyncio, HTTP, validation, CSV/JSON, HTML, Node servers.",
+        "Recipes I have ready: reverse, palindrome, FizzBuzz, binary search, quicksort, prime sieve, Fibonacci, "
+        "dedupe, sorting dicts, atomic file writes, retries, argparse, SQLite, unit tests, dataclasses, asyncio, "
+        "HTTP, validation, CSV/JSON, HTML, Node servers, LRU caches, timing decorators, context managers, "
+        "thread pools, token-bucket rate limits, logging setup, subprocess, env config, enums, typing/Protocol, "
+        "top-K with heapq, itertools chunking and pathlib scans.",
     ])
 
 
@@ -1691,6 +2078,54 @@ _DEBUG: dict[str, tuple[str, list[str], str]] = {
         "Retry only idempotent calls, with jittered backoff and a cap.",
         "Distinguish connect timeouts (DNS/firewall) from read timeouts (slow server).",
     ], "```python\nfor attempt in range(3):\n    try:\n        data = fetch(url, timeout=10)\n        break\n    except TimeoutError:\n        time.sleep(0.5 * 2 ** attempt)\n```"),
+    "syntaxerror": ("SyntaxError: invalid syntax", [
+        "Python points one token past the real problem — look at the **end of the previous line**.",
+        "Missing `:` after `if`/`for`/`def`/`class`, or `=` where `==` belongs.",
+        "Unclosed bracket or quote: `python -m py_compile file.py` reports the first one precisely.",
+        "Python 2 leftovers (`print \"x\"`) running under a Python 3 interpreter.",
+    ], "```bash\npython -m py_compile your_file.py\n```"),
+    "indentationerror": ("IndentationError / TabError", [
+        "Tabs and spaces mixed in one file — pick spaces (4) and convert the whole file once.",
+        "An empty block body; a bare `pass` is legal, a comment alone is not.",
+        "A pasted snippet dragged the wrong indentation in with it.",
+        "Tabs are invisible in most editors — turn on visible whitespace and re-indent the block.",
+    ], "```bash\npython -m tabnanny your_file.py\n```"),
+    "nameerror": ("NameError: name is not defined", [
+        "A typo, or the variable is defined on a branch that did not run.",
+        "Assigned inside a function → it is local; return it instead of reaching for `global`.",
+        "Missing import, or the import silently failed inside `except ImportError`.",
+        "Shadowed by a parameter of the same name that is `None` on that path.",
+    ], "```python\nprint(sorted(globals())[:10])   # what actually exists here\n```"),
+    "filenotfounderror": ("FileNotFoundError / PermissionError", [
+        "Relative paths resolve against the **current working directory**, not the script.",
+        "Build paths from the script location: `Path(__file__).parent / \"data.csv\"`.",
+        "The output directory does not exist yet — `mkdir(parents=True, exist_ok=True)`.",
+        "Permission denied on write: check the user, the container mount and read-only volumes.",
+    ], "```python\nfrom pathlib import Path\npath = Path(__file__).parent / \"data.csv\"\npath.parent.mkdir(parents=True, exist_ok=True)\n```"),
+    "address already in use": ("OSError: address already in use", [
+        "Another process owns the port — find and stop it instead of picking a random new one.",
+        "A previous run did not die: `ss -ltnp | grep :8000` shows the pid.",
+        "TIME_WAIT sockets are normal; `SO_REUSEADDR` (Flask's default) lets you rebind.",
+        "Inside Docker the port is published by the host — the conflict may be outside the container.",
+    ], "```bash\nss -ltnp | grep :8000\nkill -9 <pid>\n```"),
+    "database is locked": ("sqlite3: database is locked", [
+        "SQLite allows one writer at a time; a second writer waits (5 s default) then fails.",
+        "A long transaction is open elsewhere — commit promptly, never hold a cursor across I/O.",
+        "Enable WAL (`PRAGMA journal_mode=WAL`) so readers stop blocking the writer.",
+        "Set `timeout=` on connect and keep write transactions short and rare.",
+    ], "```python\ncon = sqlite3.connect(\"app.db\", timeout=30)\ncon.execute(\"PRAGMA journal_mode=WAL\")\n```"),
+    "cors": ("CORS error in the browser", [
+        "CORS is enforced by the **browser**, not the server — curl works while fetch fails.",
+        "The server must send `Access-Control-Allow-Origin` for your origin (not `*` with credentials).",
+        "Preflights (`OPTIONS`) must return 204 with the allowed headers and methods.",
+        "Same-origin in production and a dev proxy in development removes the problem entirely.",
+    ], "```python\n# Flask\n@app.after_request\ndef cors(resp):\n    resp.headers[\"Access-Control-Allow-Origin\"] = \"http://localhost:5173\"\n    return resp\n```"),
+    "memoryerror": ("MemoryError / the process was OOM-killed", [
+        "Reading a whole file into memory — stream it line by line instead.",
+        "Loading every row into a list when a generator would do.",
+        "An unbounded cache or growing dict is the usual slow leak; cap it (LRU) or prune.",
+        "Measure real usage: `tracemalloc` for Python objects, `resource.getrusage` for RSS.",
+    ], "```python\nfor line in open(\"big.csv\", encoding=\"utf-8\"):\n    handle(line.rstrip(\"\\n\"))\n```"),
     "segmentation fault": ("Segfault / native crash", [
         "A C extension or driver crashed the interpreter — pure Python does not segfault.",
         "Reproduce the smallest snippet, then get a stack: `python -X faulthandler -c ...` or `gdb --args python ...`.",
@@ -1711,6 +2146,14 @@ _DEBUG_PATTERNS = (
     ("jsondecodeerror", r"\bjsondecodeerror\b|expecting value"),
     ("timeout", r"\btimeout\b|timed out|connection reset|connection refused"),
     ("segmentation fault", r"segmentation fault|\bsegfault\b|core dumped"),
+    ("syntaxerror", r"\bsyntaxerror\b|invalid syntax"),
+    ("indentationerror", r"\bindentationerror\b|\btaberror\b|unexpected indent|expected an indented block"),
+    ("nameerror", r"\bnameerror\b|is not defined"),
+    ("filenotfounderror", r"\bfilenotfounderror\b|\bpermissionerror\b|no such file or directory|permission denied"),
+    ("address already in use", r"address already in use|\beaddrinuse\b|port .{0,20}already in use"),
+    ("database is locked", r"database is locked|sqlite3\.operationalerror"),
+    ("cors", r"\bcors\b|access-control-allow-origin|cross[- ]origin"),
+    ("memoryerror", r"\bmemoryerror\b|out of memory|\boom-killed\b|killed process"),
 )
 
 
@@ -1725,6 +2168,93 @@ def _debug_reply(prompt: str) -> str | None:
                 lines += ["", "**Guard**", code]
             lines += ["", "*From the Demo Brain's debugging guide — install a GGUF to have the model read your actual traceback.*"]
             return "\n".join(lines)
+    return None
+
+
+# --------------------------------------------------------------------------
+# advice: coding ideas, project structure, review and practice
+# --------------------------------------------------------------------------
+_ADVICE: list[tuple[str, str, str]] = [
+    (r"\b(project ideas?|what should i (build|make|code)|idea for (a )?(project|app)|practice project|something to build)\b",
+     "**Five builds that actually teach something** — pick by what you want to get better at.",
+     """1. **Log analyser** (files + regex + Counter) — read a 50 MB log, print top errors, busiest hour, slowest path. Teaches streaming and aggregation.
+2. **SQLite bookmark manager** (sqlite3 + argparse + CRUD) — add, tag, search, dedupe. Teaches schema design and migrations.
+3. **Tiny HTTP API** (Flask: 3 routes, one table) — then add validation, a test per route, and a 5 req/s rate limit. Teaches boundaries and testing.
+4. **File watcher + indexer** (pathlib + hashlib + threading) — hash files, report changes. Teaches concurrency and idempotency.
+5. **CLI notes app with a real test suite** (argparse + unittest + CI) — small enough to finish, real enough to practise review.
+
+**Scope ladder** — ship each rung before starting the next: *works on my data → has tests → handles bad input → has a README → can be re-run safely.*
+Most abandoned projects skip rung 2 and stall on rung 3."""),
+
+    (r"\b(how (do|should) i|best way to) (structure|organise|organize|layout)\b|\bproject structure\b|\bfolder (layout|structure)\b",
+     "**A layout that scales without ceremony.**",
+     """```text
+project/
+  README.md          # what it does, how to run it, one example
+  pyproject.toml     # deps + tool config (pytest/ruff)
+  src/app/           # importable package
+    __init__.py
+    config.py        # env parsing, one place
+    models.py        # data shapes (dataclasses)
+    core.py          # business logic, no I/O
+    io.py            # files, db, http — the edges
+  tests/
+    test_core.py     # fast, no network, no sleep
+  scripts/run.sh
+```
+**Rules that pay off**
+- One direction of imports: `io → core → models`. Core never imports io, which is why it is testable.
+- Config parsed once at startup, injected — not read deep inside functions.
+- Tests mirror module names; if a test is hard to write, the boundary is wrong.
+- Keep `main()` thin: parse args, build objects, call one function."""),
+
+    (r"\bcode review\b|\breview checklist\b|\bwhat to look for in (a )?(pr|review)\b",
+     "**Code review, in priority order.**",
+     """**1. Correctness** — does it do what the description says? What happens on empty input, one item, huge input, concurrent calls?
+**2. Boundaries** — are errors raised or swallowed? Is user input validated where it enters?
+**3. Tests** — is the new behaviour covered *and* a failure case? Would the test fail if the code were wrong?
+**4. Clarity** — names say what things are; a function that needs a comment to be understood is usually two functions.
+**5. Cost** — any N+1 query, unbounded memory, work inside a loop that could be computed once?
+**6. Safety** — secrets, injection, path traversal, logging personal data.
+Style nits come last and are the tool's job (ruff/black/prettier), not the reviewer's."""),
+
+    (r"\b(get|getting|become) better at (python|coding|programming|it)\b|\bimprove (my|at) (python|coding|programming)\b|\bhow (do|can) i (learn|study|practice)\b",
+     "**Deliberate practice beats tutorial hours.**",
+     """- **Read code you did not write** — one small library end to end (e.g. `requests`, `click`). Try to predict each function before you read it.
+- **Rebuild one tool from scratch** each month: a URL shortener, a task queue, a diff tool. No framework on the first attempt.
+- **Write the test first** on one feature a week; it forces you to define the contract.
+- **Reproduce one bug from a bug tracker** a week and fix it. This is the highest-yield exercise there is.
+- **Keep a `notes.md` of gotchas** — the errors you hit twice are the ones to automate away.
+- **Timebox 45 minutes**, stop mid-problem if needed: recall beats repetition."""),
+
+    (r"\bhow (do|can) i debug\b|\bdebug(ging)? (faster|better|tips)\b|\bhow to (debug|fix bugs)\b",
+     "**Debug in five moves — stop changing code hoping it works.**",
+     """1. **Reproduce it** — smallest input that still fails, written down as a command.
+2. **Read the traceback bottom-up** — the last frame in *your* code is where the assumption broke.
+3. **Check the data, not the syntax** — print types and counts (`len`, `type`, first 5 keys) right before the failing line.
+4. **Bisect** — comment out half, or `git bisect` the commits. Halving beats staring.
+5. **Write the failing test** before the fix, so the bug stays fixed.
+
+*Same input → same output: if it is intermittent, you are missing state (cache, loop order, time, concurrency).*"""),
+
+    (r"\b(testing strategy|what should i test|how much (testing|tests)|test plan)\b",
+     "**Test the contract, not every line.**",
+     """- **One test per behaviour**, named after the behaviour: `test_rejects_empty_email`, not `test_validate_2`.
+- Cover the **edges**: empty, one item, many, wrong type, huge value, unicode.
+- **Pure logic first** — if a function needs a database to test, split the function.
+- **No sleeping, no network** in unit tests; stub the edge (that is what `io.py` is for).
+- **One end-to-end test per user flow**; it catches wiring bugs the unit tests cannot see.
+- A suite that takes > 10 s stops being run. If it is slow, mark it `@slow` and keep the fast core.
+- Coverage is a map, not a target: 100% coverage with no assertions on failures proves nothing."""),
+]
+
+
+def _advice_reply(prompt: str) -> str | None:
+    low = prompt.lower()
+    for pattern, heading, body in _ADVICE:
+        if re.search(pattern, low):
+            return "\n".join([heading, "", body, "",
+                              "*Practical guidance from the Demo Brain's offline playbooks — no model weights.*"])
     return None
 
 
@@ -1782,6 +2312,22 @@ def _compare_reply(a_key: str, b_key: str) -> str:
 
 def _explain_reply(prompt: str) -> str:
     low = prompt.lower()
+    if re.search(r"\bdifference between\b|\bcompare\b", low):
+        rest = re.split(r"\bdifference between\b|\bcompare\b", low, maxsplit=1)[-1]
+        rest = re.sub(r"\b(the|a|an)\b", " ", rest)
+        halves = re.split(r"\s+and\s+|\s+(?:vs\.?|versus|or)\s+", rest, maxsplit=1)
+        if len(halves) == 2:
+            ka, kb = _find_topic(halves[0]), _find_topic(halves[1])
+            if ka and kb and ka != kb:
+                return _compare_reply(ka, kb)
+            if not (ka and kb):
+                # "a thread and a process" — one side may be unnamed in the alias table.
+                # Match an alias that carries both words instead of guessing.
+                words = set(re.findall(r"[a-z]{3,}", rest))
+                for alias, key in _ALIASES.items():
+                    alias_words = {w for w in re.split(r"[^a-z]+", alias) if len(w) >= 3}
+                    if len(alias_words) <= 5 and len(words & alias_words) >= 2:
+                        return _knowledge_reply(key)
     pair = re.split(r"\s+(?:vs\.?|versus|or)\s+", low)
     if len(pair) == 2:
         ka, kb = _find_topic(pair[0]), _find_topic(pair[1])
@@ -1897,11 +2443,14 @@ def _capabilities_reply() -> str:
         "| 🧮 Compute | arithmetic, %, unit conversion, SHA-256, base64, UUID, word counts |",
         "| 📚 Knowledge | " + str(len(_K)) + " curated CS/OS/web topics |",
         "| 🧩 Code | " + str(len(_R)) + " runnable recipes (Python, JS, HTML, SQL) |",
+        "| 🐞 Debugging | " + str(len(_DEBUG)) + " traceback guides (IndexError → CORS → memory) |",
+        "| 🧠 Playbooks | " + str(len(_ADVICE)) + " guides: project ideas, structure, review, testing, practice |",
         "| 🧪 Sandbox | Python execution + read-only shell |",
-        "| 🛠️ IDE | file tree, editor, terminal |",
+        "| 🛠️ IDE + agent | file tree, editor, terminal, agent in Auto/Turbo/Review |",
+        "| ⚙️ Settings | benchmark battery (" + str(len(__import__("benchmark_speed").CHECKS)) + " checks), engine and storage facts |",
         "| 🎨 Images | gallery, editing, thumbnails |",
         "| 🛡️ Security | device audit, SAST scanner, CVE vault |",
-        "| ⚡ Benchmark | measured TTFT / tok-per-sec |", "",
+        "| ⚡ Benchmark | measured TTFT / tok-per-sec + accuracy battery |", "",
         "Try *“explain deadlock”*, *“explain mmap vs virtual memory”*, *“write a python function to reverse a string”*, "
         "*“what is 17*31”*, or *“remember that I use Python”*.",
     ])
@@ -2014,6 +2563,10 @@ def _compose_uncached(prompt: str, language: str, thinking_level: str) -> str:
     if decision:
         return decision
 
+    advice = _advice_reply(prompt)
+    if advice:
+        return advice
+
     for compute in (_percent_reply, _convert_reply, _prime_reply, _math_reply,
                     _text_tools_reply, _summary_reply, _joke_reply, _time_reply):
         out = compute(prompt)
@@ -2036,7 +2589,7 @@ def _compose_uncached(prompt: str, language: str, thinking_level: str) -> str:
     # A concrete build request ("write…", "implement…") or a matched recipe wins.
     build_intent = re.search(
         r"\b(write|implement|show me|give me|create|build|make|generate|produce|draft|need|want)\b", low)
-    if (code_key and (build_intent or not topic)) or (wants_code and build_intent):
+    if (code_key and (build_intent or (not topic and not wants_explain))) or (wants_code and build_intent):
         reply = _code_reply(prompt, code_key)
         if code_key:
             _RECENT.append({"kind": "code", "key": code_key, "prompt": prompt})
@@ -2044,6 +2597,10 @@ def _compose_uncached(prompt: str, language: str, thinking_level: str) -> str:
     if topic:
         _RECENT.append({"kind": "topic", "key": topic, "prompt": prompt})
         return _knowledge_reply(topic)
+    if code_key:
+        # "how do i reverse a string" is a build request, not a conceptual question.
+        _RECENT.append({"kind": "code", "key": code_key, "prompt": prompt})
+        return _code_reply(prompt, code_key)
     if wants_explain:
         return _explain_reply(prompt)
     if code_key:

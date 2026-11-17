@@ -1948,6 +1948,47 @@ HTML_UI = r"""<!DOCTYPE html>
     .tool-strip-btn.new { color: #8af5cd; }
     .tool-strip-btn.new:hover { background: rgba(16,185,129,.18); }
 
+    .settings-panel { max-width: 860px; }
+    .settings-layout { display: grid; grid-template-columns: 168px 1fr; gap: 14px; min-height: 0; flex: 1; overflow: hidden; }
+    .settings-nav { display: flex; flex-direction: column; gap: 4px; }
+    .settings-tab {
+      text-align: left; padding: 8px 10px; border-radius: 9px; cursor: pointer;
+      background: transparent; border: 1px solid transparent; color: #a7b6c6;
+      font-family: inherit; font-size: .78rem; font-weight: 700;
+    }
+    .settings-tab:hover { background: rgba(148,163,184,.1); color: #fff; }
+    .settings-tab.active { background: rgba(16,185,129,.16); border-color: rgba(16,185,129,.4); color: #d5fff2; }
+    .settings-body { min-width: 0; overflow-y: auto; padding-right: 4px; }
+    .settings-pane { display: none; }
+    .settings-pane.active { display: block; }
+    .set-cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(120px, 1fr)); gap: 8px; margin-bottom: 12px; }
+    .set-card {
+      display: flex; flex-direction: column; gap: 3px; padding: 9px 11px;
+      background: rgba(148,163,184,.07); border: 1px solid var(--border-subtle); border-radius: 10px;
+    }
+    .set-card-label { font-size: .64rem; letter-spacing: .08em; text-transform: uppercase; color: #8fa0b3; font-weight: 800; }
+    .set-card-value { font-size: 1.02rem; font-weight: 800; color: #e8f6ff; font-variant-numeric: tabular-nums; }
+    .set-actions { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; margin: 10px 0; }
+    .set-note { font-size: .72rem; color: #8b9aab; }
+    .set-checks { display: flex; flex-direction: column; gap: 3px; }
+    .set-check {
+      display: flex; align-items: center; gap: 8px; padding: 5px 8px; border-radius: 7px;
+      background: rgba(148,163,184,.05); font-size: .74rem; color: #c6d3e1;
+    }
+    .set-check .mark { width: 16px; text-align: center; font-weight: 900; }
+    .set-check.pass .mark { color: #34d399; }
+    .set-check.fail .mark { color: #f87171; }
+    .set-check .prompt { color: #7f8fa1; font-family: var(--font-mono); font-size: .66rem; margin-left: auto; text-align: right; }
+    .set-rows { display: flex; flex-direction: column; gap: 6px; }
+    .set-row { display: flex; justify-content: space-between; gap: 12px; padding: 7px 9px; border-radius: 8px; background: rgba(148,163,184,.05); font-size: .76rem; }
+    .set-row span:first-child { color: #93a3b5; }
+    .set-row span:last-child { color: #e6f1fa; font-weight: 700; text-align: right; font-family: var(--font-mono); font-size: .72rem; word-break: break-all; }
+    @media (max-width: 700px) {
+      .settings-layout { grid-template-columns: 1fr; }
+      .settings-nav { flex-direction: row; overflow-x: auto; }
+      .settings-tab { white-space: nowrap; }
+    }
+
     /* ---------- agent pane (IDE) ---------- */
     .agent-pane {
       flex: 1; display: flex; flex-direction: column; gap: 7px;
@@ -2043,8 +2084,12 @@ HTML_UI = r"""<!DOCTYPE html>
     }
     .agent-send:disabled { opacity: .5; cursor: progress; }
 
-    @media (max-width: 900px) {
+    @media (max-width: 1180px) {
       .tool-strip-btn .label { display: none; }
+      .tool-strip { flex: 0 1 auto; }
+      .tool-strip-btn { padding: 5px 7px; }
+    }
+    @media (max-width: 900px) {
       .tool-strip { flex: 1 1 auto; }
       .agent-mode { font-size: .64rem; padding: 5px 3px; }
       .agent-pane { padding: 6px; }
@@ -2136,16 +2181,13 @@ HTML_UI = r"""<!DOCTYPE html>
   <main class="main">
     <header class="topbar">
       <button class="icon-btn" id="openSidebarBtn" onclick="toggleSidebar()" title="Open sidebar (Ctrl+B)" style="display:none;">☰</button>
-      <div class="model-pill" onclick="newChat()" title="Start a new chat">
+      <div class="model-pill" onclick="switchTab('chat')" title="Back to chat">
         <span class="brand-mark" aria-hidden="true">✦</span>
         <span class="brand-name">ARGON-OMEGA</span>
         <span class="tag">OFFLINE</span>
       </div>
       <span class="top-chip" id="demoChip" style="display:none;" title="No GGUF installed — replies are simulated locally">🧪 Demo</span>
       <nav class="tool-strip" aria-label="Tools">
-        <button class="tool-strip-btn active" data-tab="chat" onclick="switchTab('chat')" title="Chat">💬<span class="label">Chat</span></button>
-        <button class="tool-strip-btn new" onclick="newChat()" title="New chat (Ctrl+Shift+O)">＋<span class="label">New</span></button>
-        <span class="strip-sep" aria-hidden="true"></span>
         <button class="tool-strip-btn" data-tab="ide" onclick="switchTab('ide'); ideInit();" title="Code IDE + agent">⌨️<span class="label">IDE</span></button>
         <button class="tool-strip-btn" data-tab="gallery" onclick="switchTab('gallery'); loadGallery();" title="Image gallery">🎨<span class="label">Gallery</span></button>
         <button class="tool-strip-btn" data-tab="editor" onclick="switchTab('editor'); loadEditorPicker();" title="Image editor">🖌️<span class="label">Editor</span></button>
@@ -2154,6 +2196,7 @@ HTML_UI = r"""<!DOCTYPE html>
         <button class="tool-strip-btn" data-tab="video" onclick="switchTab('video'); loadVideoStudio();" title="Video studio">🎬<span class="label">Video</span></button>
       </nav>
       <span class="topbar-spacer"></span>
+      <button class="chip-btn" id="settingsBtn" onclick="openSettings()" title="Settings &amp; benchmark (Ctrl+,)">⚙️ <span class="t-label">Settings</span></button>
       <button class="chip-btn accent" onclick="openModels()" title="Models &amp; storage">🧠 <span class="t-label">Models</span></button>
       <button class="chip-btn" id="offlineModeBtn" onclick="toggleOfflineMode()" title="Offline mode">✈️ <span class="t-label">Offline</span></button>
     </header>
@@ -2165,7 +2208,7 @@ HTML_UI = r"""<!DOCTYPE html>
           <div class="welcome-screen" id="welcomeScreen">
             <div class="welcome-orb">✦</div>
             <div class="welcome-title">What can I help with?</div>
-            <div class="welcome-sub">100% offline AI powered by your local SSD ROM &amp; llama-server.</div>
+            <div class="welcome-sub">100% offline — no account, no cloud. Runs on local compute, a curated knowledge base and 44 code recipes until you install weights.</div>
             <div class="welcome-badge" id="welcomeBadge">⚡ Local engine ready</div>
             <div class="suggestion-grid">
               <button class="suggestion-chip" data-icon="🧠" onclick="useSuggestion('Explain how mmap works in llama-server')">
@@ -2556,6 +2599,49 @@ HTML_UI = r"""<!DOCTYPE html>
     </div>
   </div>
 
+  <div id="settingsModal" class="models-modal" onclick="if(event.target===this)closeSettings()">
+    <div class="models-panel settings-panel" role="dialog" aria-modal="true" aria-label="Settings">
+      <header class="models-head">
+        <div>
+          <h2>⚙️ Settings</h2>
+          <p>Everything runs on this machine — no account, no upload, no telemetry.</p>
+        </div>
+        <button class="icon-btn" onclick="closeSettings()" title="Close (Esc)">✕</button>
+      </header>
+      <div class="settings-layout">
+        <nav class="settings-nav" aria-label="Settings sections">
+          <button class="settings-tab active" data-pane="benchmark" onclick="settingsTab('benchmark')">⚡ Benchmark</button>
+          <button class="settings-tab" data-pane="engine" onclick="settingsTab('engine')">🧠 Engine</button>
+          <button class="settings-tab" data-pane="workspace" onclick="settingsTab('workspace')">🗂 Workspace</button>
+        </nav>
+        <div class="settings-body">
+          <section id="setPane-benchmark" class="settings-pane active">
+            <div id="setBenchCards" class="set-cards">
+              <div class="set-card"><span class="set-card-label">Accuracy</span><span class="set-card-value" id="setAcc">—</span></div>
+              <div class="set-card"><span class="set-card-label">Latency</span><span class="set-card-value" id="setLat">—</span></div>
+              <div class="set-card"><span class="set-card-label">Knowledge</span><span class="set-card-value" id="setTopics">—</span></div>
+              <div class="set-card"><span class="set-card-label">Recipes</span><span class="set-card-value" id="setRecipes">—</span></div>
+            </div>
+            <div class="set-actions">
+              <button class="btn-subtle" id="setBenchRun" onclick="settingsRunBenchmark()">▶ Run benchmark</button>
+              <span class="set-note" id="setBenchStatus">18 deterministic checks · offline</span>
+            </div>
+            <div id="setChecks" class="set-checks"><div class="set-note">Loading checks…</div></div>
+          </section>
+          <section id="setPane-engine" class="settings-pane">
+            <div id="setEngine" class="set-rows"><div class="set-note">Loading…</div></div>
+            <div class="set-actions">
+              <button class="btn-subtle" onclick="closeSettings(); openModels();">🧠 Manage models</button>
+              <button class="btn-subtle" onclick="closeSettings(); newChat();">✦ New chat</button>
+            </div>
+          </section>
+          <section id="setPane-workspace" class="settings-pane">
+            <div id="setWorkspace" class="set-rows"><div class="set-note">Loading…</div></div>
+          </section>
+        </div>
+      </div>
+    </div>
+  </div>
   <div id="modelsModal" class="models-modal" onclick="if(event.target===this)closeModels()">
     <div class="models-panel" role="dialog" aria-modal="true" aria-label="Models">
       <header class="models-head">
@@ -4569,6 +4655,124 @@ print("Primes < 50:", primes)`;
       document.getElementById('ideRightPrevBtn').style.background = which === 'preview' ? '#094771' : '';
     }
 
+
+    /* ---------------- settings (benchmark / engine / workspace) ---------------- */
+    let settingsLoadedAt = 0;
+
+    function openSettings(pane = 'benchmark') {
+      const modal = document.getElementById('settingsModal');
+      if (!modal) return;
+      modal.classList.add('open');
+      document.body.classList.add('modal-open');
+      settingsTab(pane);
+      loadSettings(true);
+      setTimeout(() => document.getElementById('settingsBtn')?.focus(), 40);
+    }
+
+    function closeSettings() {
+      const modal = document.getElementById('settingsModal');
+      if (!modal) return;
+      modal.classList.remove('open');
+      document.body.classList.remove('modal-open');
+    }
+
+    function settingsTab(pane) {
+      document.querySelectorAll('.settings-tab').forEach(btn => {
+        const on = btn.dataset.pane === pane;
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
+      });
+      document.querySelectorAll('.settings-pane').forEach(sec => {
+        sec.classList.toggle('active', sec.id === 'setPane-' + pane);
+      });
+    }
+
+    function setRow(label, value) {
+      return `<div class="set-row"><span>${label}</span><span>${value}</span></div>`;
+    }
+
+    async function loadSettings(force = false) {
+      const now = Date.now();
+      if (!force && now - settingsLoadedAt < 1500) return;
+      settingsLoadedAt = now;
+      try {
+        const status = await (await fetch('/api/status')).json();
+        const brain = status.demo_brain || status.brains || {};
+        const storage = status.storage || {};
+        const harvester = status.harvester || {};
+
+        document.getElementById('setTopics').textContent = brain.knowledge_topics ?? '—';
+        document.getElementById('setRecipes').textContent = brain.code_recipes ?? '—';
+
+        document.getElementById('setEngine').innerHTML = [
+          setRow('Engine', brain.name || 'Argon Demo Brain'),
+          setRow('Version', brain.version || '—'),
+          setRow('Weights installed', brain.active ? 'yes' : 'none (demo brain)'),
+          setRow('Knowledge topics', brain.knowledge_topics ?? '—'),
+          setRow('Code recipes', brain.code_recipes ?? '—'),
+          setRow('Memory facts', brain.memory_facts ?? 0),
+          setRow('Last measured latency', (brain.latency_ms ? brain.latency_ms.toFixed(2) + ' ms' : 'idle')),
+        ].join('');
+        document.getElementById('setEngine').insertAdjacentHTML('beforeend',
+          `<p class="set-note" style="margin-top:8px;">${brain.note || 'Answers come from local computation, a curated knowledge base and code recipes.'}</p>`);
+
+        document.getElementById('setWorkspace').innerHTML = [
+          setRow('ROM database', storage.db_path || 'argon_rom.db'),
+          setRow('Database size', (storage.db_size_mb ?? 0) + ' MB'),
+          setRow('Rows stored', (storage.total_rows ?? 0).toLocaleString()),
+          setRow('Free disk', (storage.free_disk_gb ?? 0) + ' GB'),
+          setRow('Storage guard', storage.safe ? 'ok' : 'paused (low disk)'),
+          setRow('Harvester', harvester.status || 'idle'),
+        ].join('');
+      } catch (err) {
+        document.getElementById('setEngine').innerHTML = `<div class="set-note">Could not read settings: ${err.message}</div>`;
+      }
+      await settingsRunBenchmark(true);
+    }
+
+    async function settingsRunBenchmark(quiet = false) {
+      const btn = document.getElementById('setBenchRun');
+      const note = document.getElementById('setBenchStatus');
+      if (btn) { btn.disabled = true; btn.textContent = '⏳ Running…'; }
+      try {
+        const res = await fetch('/api/benchmark/run', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ target: 'all' })
+        });
+        const data = await readJsonSafe(res);
+        const row = (data.results || [])[0] || {};
+        document.getElementById('setAcc').textContent = `${row.accuracy_score ?? 0}% (${row.checks || '0/0'})`;
+        document.getElementById('setLat').textContent = `${row.ttft_ms ?? 0} ms`;
+        const checks = row.check_detail || [];
+        const host = document.getElementById('setChecks');
+        if (checks.length) {
+          host.innerHTML = checks.map(c =>
+            `<div class="set-check ${c.ok ? 'pass' : 'fail'}"><span class="mark">${c.ok ? '✓' : '✕'}</span>` +
+            `<span>${c.name}</span><span class="prompt">${c.prompt}</span></div>`).join('');
+        } else {
+          host.innerHTML = '<div class="set-note">This engine reports a score only — install a GGUF for per-check detail.</div>';
+        }
+        if (note) {
+          const passed = checks.filter(c => c.ok).length || row.checks_passed || 0;
+          const total = checks.length || row.checks_total || 0;
+          note.textContent = quiet
+            ? `${passed}/${total} checks passed · measured just now`
+            : `Re-ran ${total} checks · ${row.ttft_ms} ms per turn`;
+        }
+        toast(`Benchmark: ${row.checks || ''} checks passed`, 'ok', 2000);
+      } catch (err) {
+        if (note) note.textContent = 'Benchmark failed: ' + err.message;
+        toast('Benchmark failed', 'err');
+      } finally {
+        if (btn) { btn.disabled = false; btn.textContent = '▶ Run benchmark'; }
+      }
+    }
+
+    document.addEventListener('keydown', (e) => {
+      if ((e.ctrlKey || e.metaKey) && e.key === ',') { e.preventDefault(); openSettings(); }
+      if (e.key === 'Escape') closeSettings();
+    });
+
     /* ---------------- coding agent: Auto / Turbo / Request review ---------------- */
     let agentMode = 'auto';
     let agentToken = null;
@@ -5011,7 +5215,7 @@ print("Primes < 50:", primes)`;
       <div class="welcome-screen" id="welcomeScreen">
         <div class="welcome-orb">✦</div>
         <div class="welcome-title">What can I help with?</div>
-        <div class="welcome-sub">100% offline AI powered by your local SSD ROM &amp; llama-server.</div>
+        <div class="welcome-sub">100% offline — no account, no cloud. Runs on local compute, a curated knowledge base and 44 code recipes until you install weights.</div>
         <div class="welcome-badge" id="welcomeBadge">⚡ Local engine ready</div>
         <div class="suggestion-grid">
           <button class="suggestion-chip" data-icon="🧠" onclick="useSuggestion('Explain how mmap works in llama-server')">

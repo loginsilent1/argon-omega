@@ -24,6 +24,12 @@ CHECKS = [
     ("decision: sqlite/postgres", "should I use postgres or sqlite", lambda r: "one writer" in r.lower() or "postgres" in r.lower()),
     ("debug: indexerror", "fix this IndexError list index out of range", lambda r: "len(seq) - 1" in r or "empty" in r.lower()),
     ("debug: keyerror", "how do i fix a KeyError", lambda r: "d.get(" in r or "get(key" in r.lower()),
+    ("debug: indentation", "why do I get IndentationError unexpected indent", lambda r: "tab" in r.lower()),
+    ("code: lru cache", "write a python lru cache", lambda r: "class LRUCache" in r or "OrderedDict" in r),
+    ("code: retry decorator", "write a retry decorator", lambda r: "def retry" in r or "backoff" in r.lower()),
+    ("knowledge: ai", "what is ai", lambda r: "artificial intelligence" in r.lower()),
+    ("compare: thread/process", "what is the difference between a thread and a process", lambda r: "process" in r.lower() and "thread" in r.lower()),
+    ("advice: debugging", "how do i debug faster", lambda r: "reproduce" in r.lower() or "bisect" in r.lower()),
 ]
 
 
@@ -54,6 +60,19 @@ def _accuracy(model: str = "auto") -> tuple[int, str, int]:
             pass
     total = len(CHECKS)
     return round(100 * passed / total), f"{passed}/{total}", passed
+
+
+def accuracy_detail(model: str = "demo") -> list[dict]:
+    """Per-check results so the UI can show what passed, not just a score."""
+    rows = []
+    for name, prompt, predicate in CHECKS:
+        reply = answer_query(prompt, model=model, swarm_enabled=False).get("reply", "")
+        try:
+            ok = bool(predicate(reply))
+        except Exception:
+            ok = False
+        rows.append({"name": name, "prompt": prompt, "ok": ok})
+    return rows
 
 
 def _demo_benchmark() -> dict | None:
@@ -89,6 +108,7 @@ def _demo_benchmark() -> dict | None:
         "ms_per_token": round(total_ms / tokens, 4),
         "accuracy_score": score,
         "checks": frac,
+        "check_detail": accuracy_detail("auto"),
         "checks_passed": passed,
         "checks_total": len(CHECKS),
         "demo": True,
