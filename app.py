@@ -1921,6 +1921,21 @@ HTML_UI = r"""<!DOCTYPE html>
       .sidebar .system-strip { padding: 7px 9px; gap: 4px; }
     }
 
+    /* ---------- sidebar tool list (ChatGPT-style nav) ---------- */
+    .side-tools { display: flex; flex-direction: column; gap: 1px; padding: 0 6px; flex: none; }
+    .side-tool {
+      display: flex; align-items: center; gap: 10px; width: 100%;
+      padding: 7px 9px; border-radius: 9px; cursor: pointer; text-align: left;
+      background: transparent; border: 1px solid transparent;
+      color: #c2d1df; font-family: inherit; font-size: .8rem; font-weight: 600;
+      transition: background .15s ease, color .15s ease, border-color .15s ease;
+    }
+    .side-tool:hover { background: rgba(148,163,184,.12); color: #fff; }
+    .side-tool.active {
+      background: rgba(16,185,129,.15); border-color: rgba(16,185,129,.38); color: #d8fff3; font-weight: 800;
+    }
+    .side-tool .st-icon { font-size: .92rem; line-height: 1; width: 16px; text-align: center; }
+
     /* ---------- sidebar bottom actions ---------- */
     .sidebar-actions {
       display: flex; flex-direction: column; gap: 2px;
@@ -1940,33 +1955,7 @@ HTML_UI = r"""<!DOCTYPE html>
       font-family: var(--font-mono);
     }
 
-    /* ---------- top tool strip (ChatGPT-style) ---------- */
-    .tool-strip {
-      display: flex; align-items: center; gap: 3px;
-      min-width: 0; flex: 0 1 auto; overflow-x: auto; overflow-y: hidden;
-      padding: 2px; border-radius: 11px;
-      background: rgba(148,163,184,.06); border: 1px solid var(--border-subtle);
-      scrollbar-width: none;
-    }
-    .tool-strip::-webkit-scrollbar { display: none; }
-    .tool-strip .strip-sep {
-      width: 1px; height: 18px; flex: none; margin: 0 3px;
-      background: var(--border-subtle);
-    }
-    .tool-strip-btn {
-      display: inline-flex; align-items: center; gap: 5px; flex: none;
-      padding: 5px 9px; min-height: 28px; border-radius: 8px;
-      border: 1px solid transparent; background: transparent; cursor: pointer;
-      color: #b8c6d6; font-family: inherit; font-size: .72rem; font-weight: 700;
-      transition: background .15s ease, color .15s ease, border-color .15s ease;
-    }
-    .tool-strip-btn:hover { background: rgba(148,163,184,.14); color: #fff; }
-    .tool-strip-btn.active {
-      background: rgba(16,185,129,.16); border-color: rgba(16,185,129,.4); color: #d3fff0;
-    }
-    .tool-strip-btn.new { color: #8af5cd; }
-    .tool-strip-btn.new:hover { background: rgba(16,185,129,.18); }
-
+    /* ---------- settings ---------- */
     .settings-panel { max-width: 860px; }
     .settings-layout { display: grid; grid-template-columns: 168px 1fr; gap: 14px; min-height: 0; flex: 1; overflow: hidden; }
     .settings-nav { display: flex; flex-direction: column; gap: 4px; }
@@ -2103,13 +2092,7 @@ HTML_UI = r"""<!DOCTYPE html>
     }
     .agent-send:disabled { opacity: .5; cursor: progress; }
 
-    @media (max-width: 1340px) {
-      .tool-strip-btn .label { display: none; }
-      .tool-strip { flex: 0 1 auto; }
-      .tool-strip-btn { padding: 5px 7px; }
-    }
     @media (max-width: 900px) {
-      .tool-strip { flex: 1 1 auto; }
       .agent-mode { font-size: .64rem; padding: 5px 3px; }
       .agent-pane { padding: 6px; }
     }
@@ -2167,6 +2150,33 @@ HTML_UI = r"""<!DOCTYPE html>
     </label>
 
     <div class="sidebar-section-header">
+      <span class="sidebar-section-title">Tools</span>
+    </div>
+    <nav class="side-tools" aria-label="Tools">
+      <button class="side-tool active" data-tab="chat" onclick="switchTab('chat')">
+        <span class="st-icon" aria-hidden="true">💬</span><span>Chat</span>
+      </button>
+      <button class="side-tool" data-tab="ide" onclick="switchTab('ide'); ideInit();">
+        <span class="st-icon" aria-hidden="true">⌨️</span><span>Code IDE</span>
+      </button>
+      <button class="side-tool" data-tab="gallery" onclick="switchTab('gallery'); loadGallery();">
+        <span class="st-icon" aria-hidden="true">🎨</span><span>Gallery</span>
+      </button>
+      <button class="side-tool" data-tab="editor" onclick="switchTab('editor'); loadEditorPicker();">
+        <span class="st-icon" aria-hidden="true">🖌️</span><span>Image editor</span>
+      </button>
+      <button class="side-tool" data-tab="security" onclick="switchTab('security')">
+        <span class="st-icon" aria-hidden="true">🛡️</span><span>Security</span>
+      </button>
+      <button class="side-tool" data-tab="benchmark" onclick="switchTab('benchmark'); loadBenchmarkModels();">
+        <span class="st-icon" aria-hidden="true">⚡</span><span>Benchmark</span>
+      </button>
+      <button class="side-tool" data-tab="video" onclick="switchTab('video'); loadVideoStudio();">
+        <span class="st-icon" aria-hidden="true">🎬</span><span>Video studio</span>
+      </button>
+    </nav>
+
+    <div class="sidebar-section-header">
       <span class="sidebar-section-title">Recent chats</span>
     </div>
     <div class="history-list" id="historyList"></div>
@@ -2217,20 +2227,8 @@ HTML_UI = r"""<!DOCTYPE html>
         <span class="tag">OFFLINE</span>
       </div>
       <span class="top-chip" id="demoChip" style="display:none;" title="No GGUF installed — replies are simulated locally">🧪 Demo</span>
-      <nav class="tool-strip" aria-label="Tools">
-        <button class="tool-strip-btn active" data-tab="chat" onclick="switchTab('chat')" title="Chat">💬<span class="label">Chat</span></button>
-        <button class="tool-strip-btn new" onclick="newChat()" title="New chat (Ctrl+Shift+O)">＋<span class="label">New</span></button>
-        <span class="strip-sep" aria-hidden="true"></span>
-        <button class="tool-strip-btn" data-tab="ide" onclick="switchTab('ide'); ideInit();" title="Code IDE + agent">⌨️<span class="label">IDE</span></button>
-        <button class="tool-strip-btn" data-tab="gallery" onclick="switchTab('gallery'); loadGallery();" title="Image gallery">🎨<span class="label">Gallery</span></button>
-        <button class="tool-strip-btn" data-tab="editor" onclick="switchTab('editor'); loadEditorPicker();" title="Image editor">🖌️<span class="label">Editor</span></button>
-        <button class="tool-strip-btn" data-tab="security" onclick="switchTab('security')" title="Security lab">🛡️<span class="label">Security</span></button>
-        <button class="tool-strip-btn" data-tab="benchmark" onclick="switchTab('benchmark'); loadBenchmarkModels();" title="Benchmark">⚡<span class="label">Bench</span></button>
-        <button class="tool-strip-btn" data-tab="video" onclick="switchTab('video'); loadVideoStudio();" title="Video studio">🎬<span class="label">Video</span></button>
-        <span class="strip-sep" aria-hidden="true"></span>
-        <button class="tool-strip-btn" id="settingsBtn" onclick="openSettings()" title="Settings &amp; benchmark (Ctrl+,)">⚙️<span class="label">Settings</span></button>
-      </nav>
       <span class="topbar-spacer"></span>
+      <button class="chip-btn" onclick="openSettings()" title="Settings &amp; benchmark (Ctrl+,)">⚙️ <span class="t-label">Settings</span></button>
       <button class="chip-btn accent" onclick="openModels()" title="Models &amp; storage">🧠 <span class="t-label">Models</span></button>
       <button class="chip-btn" id="offlineModeBtn" onclick="toggleOfflineMode()" title="Offline mode">✈️ <span class="t-label">Offline</span></button>
     </header>
@@ -2735,12 +2733,12 @@ HTML_UI = r"""<!DOCTYPE html>
 
     function switchTab(name, btn) {
       document.querySelectorAll('.tab-view').forEach(el => el.classList.remove('active'));
-      document.querySelectorAll('.tool-nav-btn, .tool-strip-btn').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tool-nav-btn, .tool-strip-btn, .side-tool').forEach(el => el.classList.remove('active'));
       const view = document.getElementById('tab-' + name);
       if (view) view.classList.add('active');
       const target = btn || document.querySelector(`.tool-nav-btn[data-tab="${name}"]`);
       if (target && target.classList) target.classList.add('active');
-      const stripBtn = document.querySelector(`.tool-strip-btn[data-tab="${name}"]`);
+      const stripBtn = document.querySelector(`.tool-strip-btn[data-tab="${name}"], .side-tool[data-tab="${name}"]`);
       if (stripBtn) {
         stripBtn.classList.add('active');
         try { stripBtn.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (e) {}

@@ -124,14 +124,13 @@ static checks actually found.
 
 ## UI & UX
 
-- **Tool strip (top bar)**: ChatGPT-style row — 💬 Chat · ＋ New · ⌨️ IDE · 🎨 Gallery ·
-  🖌️ Editor · 🛡️ Security · ⚡ Bench · 🎬 Video · ⚙️ Settings — with the active tool
-  highlighted. It scrolls horizontally and collapses to icons under 1340 px, so nothing
-  is ever clipped.
-- **Sidebar (ChatGPT layout)**: brand row, then **＋ New chat** at the top, chat search and
-  **Recent chats** in the middle, and **⚙️ Settings / 🧠 Models** pinned at the bottom above
-  the storage readout.
-- **⚙️ Settings** (top strip, sidebar, or `Ctrl+,`): **Benchmark** (accuracy cards, latency,
+- **Sidebar is the navigation** (ChatGPT layout): brand row → **＋ New chat** at the top →
+  chat search → **Tools** (💬 Chat, ⌨️ Code IDE, 🎨 Gallery, 🖌️ Image editor, 🛡️ Security,
+  ⚡ Benchmark, 🎬 Video studio, with the active one highlighted) → **Recent chats** →
+  archived → **⚙️ Settings / 🧠 Models** pinned at the bottom above the storage readout.
+- **Top bar** stays for device state only: brand, demo chip, Settings, Models, Offline —
+  no duplicate tool rows to clip or scroll.
+- **⚙️ Settings** (sidebar, top bar, or `Ctrl+,`): **Benchmark** (accuracy cards, latency,
   all 18 checks with pass/fail rows and a re-run button), **Engine** (active brain, topics,
   recipes, memory facts, measured latency) and **Workspace** (ROM database path and size,
   rows, free disk, storage guard, harvester state).
