@@ -144,8 +144,11 @@ static checks actually found.
   `touch-action: manipulation` kills the 300 ms double-tap delay.
 - Tapping any row in the sidebar opens that conversation and keeps it highlighted, even
   when the chat is still empty.
-- **Top bar** stays for device state only: brand, demo chip, Settings, Models, Offline —
-  no duplicate tool rows to clip or scroll.
+- **Top bar is minimal**: brand, demo chip and the offline toggle only — Models and Settings
+  are not up there any more, they live in the sidebar (and `Ctrl+,`).
+- **Compact scale**: 248 px sidebar, 46 px top bar, 42 px New chat, 44 px history rows,
+  40 px tool rows, 760 px chat column/composer and a 780 px Settings panel (940 px for the
+  security lab) — denser without dropping below comfortable touch targets.
 - **⚙️ Settings** (sidebar, top bar, or `Ctrl+,`): **Benchmark** (accuracy cards, latency,
   all 18 checks with pass/fail rows and a re-run button), **Engine** (active brain, topics,
   recipes, memory facts, measured latency) and **Workspace** (ROM database path and size,

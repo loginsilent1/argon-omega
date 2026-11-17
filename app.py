@@ -2211,6 +2211,60 @@ HTML_UI = r"""<!DOCTYPE html>
       .agent-pane { padding: 6px; }
     }
 
+    /* ---------- compact layout ---------- */
+    :root { --sidebar-w: 248px; }
+    .topbar { padding: 6px 12px; gap: 8px; min-height: 46px; }
+    .topbar .chip-btn { padding: 5px 9px; font-size: .72rem; }
+    .topbar .icon-btn { width: 34px; height: 34px; }
+    .model-pill { padding: 4px 10px; border-radius: 10px; gap: 6px; }
+    .brand-name { font-size: .86rem; }
+    .model-pill .tag { font-size: .54rem; padding: 1px 5px; }
+
+    .sidebar { width: 248px; gap: 6px; padding: 10px 8px; }
+    .sidebar-header { padding: 6px 8px 4px; min-height: 44px; }
+    .sidebar-brand .brand-text { font-size: .9rem; }
+    .sidebar-brand .brand-text small { font-size: .56rem; }
+    .sidebar .btn-new-chat, .btn-new-chat.compact { min-height: 42px; margin: 0 6px 6px; width: calc(100% - 12px); font-size: .8rem; }
+    .sidebar-search { min-height: 40px; margin: 0 6px 6px; padding: 8px 10px; }
+    .sidebar-search input { font-size: .84rem; }
+    .sidebar-section-header { padding: 2px 12px 4px; }
+    .sidebar-section-title { font-size: .6rem; letter-spacing: .12em; }
+    .history-list { padding: 0 6px 6px; gap: 2px; }
+    .history-item { min-height: 44px; padding: 8px 6px 8px 10px; border-radius: 9px; }
+    .history-item-title { font-size: .79rem; }
+    .hist-act { width: 30px; height: 30px; font-size: .82rem; }
+    .tools-drawer { margin: 0 6px 4px; }
+    .tools-toggle { min-height: 38px; padding: 6px 10px; font-size: .66rem; }
+    .tools-item { min-height: 40px; padding: 7px 10px; font-size: .8rem; border-radius: 9px; }
+    .archive-block { margin: 2px 6px 0; }
+    .archive-toggle { min-height: 36px; padding: 6px 10px; font-size: .68rem; }
+    .sidebar-actions { margin: 4px 6px 0; padding-top: 6px; gap: 4px; }
+    .sidebar-action { min-height: 40px; padding: 7px 10px; font-size: .78rem; border-radius: 8px; }
+    .system-strip { margin: 4px 6px 0; padding: 8px 10px; min-height: 70px; gap: 4px; }
+    .system-strip .ss-row { font-size: .68rem; }
+    .system-strip .progress-bar { height: 5px; }
+    .sidebar-foot { min-height: 30px; padding: 6px 8px; font-size: .64rem; }
+
+    .chat-container { max-width: 760px; }
+    .chat-scroll { padding: 14px 16px 6px; }
+    .welcome-title { font-size: 1.5rem; }
+    .welcome-sub { font-size: .82rem; }
+    .input-wrapper { padding: 6px 12px 8px; }
+    .composer { max-width: 760px; padding: 8px 10px 6px; border-radius: 16px; }
+    .composer textarea { font-size: .9rem; }
+    .composer-tools { margin-top: 6px; }
+    .tab-view { padding: 0; }
+    .gallery-container, .lab-container { padding: 12px; gap: 10px; }
+    .card { padding: 10px 11px; }
+
+    .settings-panel { max-width: 780px; border-radius: 16px; }
+    .settings-panel.wide { max-width: 940px; }
+    .models-head { padding: 12px 14px; }
+    .settings-layout { grid-template-columns: 148px 1fr; gap: 10px; }
+    .settings-tab { padding: 7px 9px; font-size: .76rem; }
+    .set-cards { gap: 6px; }
+    .set-card { padding: 8px 10px; }
+
     /* ---------- mobile drawer (last word: it must win over the desktop panel rules) ---------- */
     @media (max-width: 820px) {
       .sidebar {
@@ -2346,8 +2400,6 @@ HTML_UI = r"""<!DOCTYPE html>
       </div>
       <span class="top-chip" id="demoChip" style="display:none;" title="No GGUF installed — replies are simulated locally">🧪 Demo</span>
       <span class="topbar-spacer"></span>
-      <button class="chip-btn" onclick="openSettings()" title="Settings &amp; benchmark (Ctrl+,)">⚙️ <span class="t-label">Settings</span></button>
-      <button class="chip-btn accent" onclick="openModels()" title="Models &amp; storage">🧠 <span class="t-label">Models</span></button>
       <button class="chip-btn" id="offlineModeBtn" onclick="toggleOfflineMode()" title="Offline mode">✈️ <span class="t-label">Offline</span></button>
     </header>
 
