@@ -3946,8 +3946,11 @@ print("Primes < 50:", primes)`;
         <div class="lab-panel" style="padding:14px;">
           <div style="font-weight:800;color:#38bdf8;margin-bottom:6px;">${r.tier} — ${r.filename}</div>
           <div class="sub-metric">SSD Size: ${r.size}</div>
-          <div style="margin:6px 0;font-size:0.85rem;">⚡ TTFT: <strong>${r.ttft_ms}ms</strong> • 🚀 Speed: <strong>${r.tok_per_sec} tok/s</strong> • ⏱️ ${r.ms_per_token} ms/tok</div>
-          <div style="font-size:0.82rem;margin-bottom:4px;">Accuracy Score: <strong>${r.accuracy_score}%</strong></div>
+          <div style="margin:6px 0;font-size:0.85rem;">⚡ TTFT: <strong>${r.ttft_ms}ms</strong> • 🚀 ${
+            r.demo ? 'Speed: <strong>instant</strong> (template, not tokens)' :
+            `Speed: <strong>${r.tok_per_sec} tok/s</strong> • ⏱️ ${r.ms_per_token} ms/tok`}</div>
+          <div style="font-size:0.82rem;margin-bottom:4px;">Accuracy: <strong>${r.accuracy_score}%</strong>${
+            r.checks ? ` <span class="sub-metric">(${r.checks} checks passed)</span>` : ''}</div>
           <div class="progress-bar"><div class="progress-fill" style="width:${r.accuracy_score}%;"></div></div>
         </div>`).join('') || '<div class="sub-metric">No results.</div>';
     }
@@ -4880,7 +4883,7 @@ print("Primes < 50:", primes)`;
       if (banner) banner.style.display = demoActive ? 'flex' : 'none';
       if (badge) {
         badge.textContent = demoActive
-          ? '🧪 Demo Brain — replies are simulated locally'
+          ? '🧪 Demo Brain — local computation + knowledge base, no model weights'
           : `⚡ ${models.count || 0} local brain(s) ready`;
       }
       if (engineState) {
@@ -4889,12 +4892,12 @@ print("Primes < 50:", primes)`;
       }
       if (engineDetail) {
         engineDetail.textContent = demoActive
-          ? `No GGUF in models/? — install one for real answers · ${demo.speed_tokens_per_sec || 42} tok/s simulated`
+          ? `No GGUF in models/ · answers in ${demo.latency_ms ? demo.latency_ms.toFixed(1) + ' ms' : '~1 ms'} · install one for real reasoning`
           : `${models.count || 0} model(s) installed in models/`;
       }
       if (composerStatus) {
         composerStatus.textContent = demoActive
-          ? 'Demo Brain · simulated locally · 100% offline'
+          ? 'Demo Brain · template + retrieval · 100% offline'
           : '100% offline · local SSD ROM';
       }
       const dot = document.getElementById('engineDot');

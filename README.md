@@ -38,15 +38,48 @@
 
 ## Demo Brain (works with zero models)
 
-No GGUF installed? The app still runs a full chat experience through the built-in
-**Demo Brain** (`demo_brain.py`): replies are generated locally from intent
-templates, streamed token-by-token, and labelled `🧪 Demo Brain` so it is never
-mistaken for model output. It is used automatically when `models/` has no brain
-and a local `llama-server` is unavailable.
+No GGUF installed? Chat still works through the built-in **Demo Brain**
+(`demo_brain.py`). It is not a language model and does not pretend to be one — it
+routes each prompt to one of three things it can actually do:
+
+- **Compute it.** Arithmetic and percentages (AST-whitelisted evaluator), unit
+  conversion (km/mi, kg/lb, °C/°F), SHA-256, base64, UUID v4, word/character counts,
+  primality and factorisation, extractive summaries of pasted text, date and time —
+  all executed, never guessed.
+- **Look it up.** A curated knowledge base of **44 CS/OS/web topics** (deadlock,
+  race conditions, GIL, async, indexes, ACID, HTTP, TLS, DNS, CORS, JWT, containers,
+  Kubernetes, git rebase, RAG, embeddings, quantization, GGUF, profiling, …) written
+  as real explanations with the failure mode for each, plus automatic `X vs Y`
+  comparisons.
+- **Write working code.** **31 runnable recipes** — reverse/palindrome/FizzBuzz,
+  binary search, quicksort, prime sieve, Fibonacci, dedupe, sort-by-value, atomic
+  file writes, retries with backoff, argparse, SQLite, unit tests, dataclasses,
+  asyncio with bounded concurrency, HTTP with timeouts, validation, CSV/JSON, a JS
+  debounce, an HTML page, a Node server. Every Python recipe is executed by
+  `python selftest.py` and runs as-is.
+
+Also handled: **`X or Y?` decisions** (SQLite/Postgres, SQL/NoSQL, JWT/sessions,
+pytest/unittest, WebSockets/polling, monorepo/polyrepo), **traceback triage** for the
+twelve exceptions people actually hit (IndexError, KeyError, TypeError, ImportError,
+JSONDecodeError, timeouts, segfaults…), and honest scaffolding when no recipe matches —
+a real skeleton for your function name rather than an unrelated snippet.
+
+Anything outside those refuses cleanly: it says it has no vetted answer, offers the
+topics it does cover, and points at installing a real brain — instead of padding the
+reply with placeholder prose. Multi-turn follow-ups work too (*“add tests”*,
+*“in JavaScript”*, *“shorter”*, *“more detail”*).
+
+**Speed** is measured, not simulated: answers are composed in ~1–2 ms, cached after the
+first hit, and streamed in multi-word chunks with no artificial pacing
+(`ARGON_DEMO_PACE=0.02` reintroduces a per-chunk delay if you want a demo). The Benchmark
+tab reports that measured latency plus a 12-check accuracy battery — arithmetic, units,
+fact lookup, two code recipes, two knowledge entries, a decision question, two traceback
+triage checks and one honesty check — currently **12/12** with no weights installed.
+
+`python selftest.py` re-runs all of it (battery, every recipe in a temp dir, follow-up
+handling, cold/warm latency) and exits non-zero on any failure.
 
 - Honest labelling: the top bar shows a `🧪 Demo Brain` chip and the composer shows a banner.
-- Useful behaviour without weights: code snippets, explanations, security guidance,
-  safe arithmetic, date/time, and a small persistent memory (`demo_memory.json`).
 - Installs seamlessly: drop any GGUF into `models/` (or use **Models** in the sidebar /
   `python download_models.py --recommended`) and the real engine takes over on the next message.
 - Turn it off entirely: `ARGON_DEMO_BRAIN=0 python app.py`.
