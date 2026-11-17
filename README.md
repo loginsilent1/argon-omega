@@ -124,10 +124,17 @@ static checks actually found.
 
 ## UI & UX
 
-- **Sidebar is the navigation** (ChatGPT layout): brand row → **＋ New chat** at the top →
-  chat search → **Tools** (💬 Chat, ⌨️ Code IDE, 🎨 Gallery, 🖌️ Image editor, 🛡️ Security,
-  ⚡ Benchmark, 🎬 Video studio, with the active one highlighted) → **Recent chats** →
-  archived → **⚙️ Settings / 🧠 Models** pinned at the bottom above the storage readout.
+- **Tools live in a bottom navigation bar** — 💬 Chat · ⌨️ IDE · 🎨 Gallery · 🖌️ Editor ·
+  🛡️ Security · ⚡ Bench · 🎬 Video · ⚙️ Settings — always visible under the content, thumb
+  reachable, 52–56 px tap targets, safe-area padding on phones, horizontal scroll on
+  narrow screens. The active tool is highlighted and marked `aria-current`.
+- **Sidebar** keeps the conversation side: brand row → **＋ New chat** → chat search →
+  **Recent chats** → archived → **⚙️ Settings / 🧠 Models** pinned at the bottom above the
+  storage readout.
+- **Touch sizing**: a `(pointer: coarse)` pass grows icon buttons to 42 px, chips and
+  buttons to 40 px, history rows and sidebar actions to 44 px, the send button to 48 px,
+  and sets form fonts to 16 px so iOS does not zoom on focus. Tap highlight is removed and
+  `touch-action: manipulation` kills the 300 ms double-tap delay.
 - **Top bar** stays for device state only: brand, demo chip, Settings, Models, Offline —
   no duplicate tool rows to clip or scroll.
 - **⚙️ Settings** (sidebar, top bar, or `Ctrl+,`): **Benchmark** (accuracy cards, latency,

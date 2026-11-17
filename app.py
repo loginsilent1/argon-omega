@@ -417,6 +417,7 @@ HTML_UI = r"""<!DOCTYPE html>
     .tab-view {
       display: none;
       flex: 1;
+      min-height: 0;
       flex-direction: column;
       overflow: hidden;
     }
@@ -1925,6 +1926,61 @@ HTML_UI = r"""<!DOCTYPE html>
       .sidebar .system-strip { padding: 7px 9px; gap: 4px; }
     }
 
+    /* ---------- bottom navigation (touch-first tool switch) ---------- */
+    .bottom-nav {
+      flex: none; display: flex; align-items: stretch; gap: 2px;
+      padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
+      background: #0a0e13;
+      border-top: 1px solid var(--border-subtle);
+      overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
+      z-index: 15;
+    }
+    .bottom-nav::-webkit-scrollbar { display: none; }
+    .nav-item {
+      flex: 1 1 0; min-width: 62px; min-height: 52px;
+      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
+      padding: 4px 6px; border-radius: 12px;
+      border: 1px solid transparent; background: transparent; cursor: pointer;
+      color: #9fb0c2; font-family: inherit; font-size: .63rem; font-weight: 700;
+      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
+      transition: background .15s ease, color .15s ease, border-color .15s ease;
+    }
+    .nav-item .nav-icon { font-size: 1.15rem; line-height: 1; }
+    .nav-item .nav-label { white-space: nowrap; }
+    .nav-item:hover { background: rgba(148,163,184,.12); color: #fff; }
+    .nav-item:active { transform: scale(.96); }
+    .nav-item.active {
+      background: rgba(16,185,129,.16); border-color: rgba(16,185,129,.42); color: #d8fff3;
+    }
+    @media (max-width: 900px) {
+      .nav-item { min-width: 64px; min-height: 56px; }
+      .nav-item .nav-label { font-size: .59rem; }
+    }
+
+    /* ---------- touch sizing ---------- */
+    button, .chip-btn, .icon-btn, select, input[type="text"], input[type="search"], textarea {
+      touch-action: manipulation;
+    }
+    button { -webkit-tap-highlight-color: transparent; }
+    body { overscroll-behavior: none; }
+    @media (pointer: coarse) {
+      .icon-btn { width: 42px; height: 42px; }
+      .chip-btn { min-height: 40px; padding: 8px 12px; }
+      .btn-subtle { min-height: 40px; padding: 9px 12px; }
+      .btn-new-chat { min-height: 46px; }
+      .sidebar-search { min-height: 44px; }
+      .history-item { min-height: 44px; padding: 11px 12px; }
+      .sidebar-action { min-height: 44px; }
+      .agent-chip { min-height: 34px; padding: 6px 10px; }
+      .agent-mode { min-height: 38px; }
+      .agent-send { width: 48px; }
+      .t-label { display: none; }
+      .chat-composer textarea, #promptInput, #agentPrompt, .sidebar-search input,
+      input[type="text"], input[type="search"], select { font-size: 16px; }
+      .send-btn { width: 48px; height: 48px; }
+      .composer-row { gap: 8px; }
+    }
+
     /* ---------- sidebar tool list (ChatGPT-style nav) ---------- */
     .side-tools { display: flex; flex-direction: column; gap: 1px; padding: 0 6px; flex: none; }
     .side-tool {
@@ -2152,33 +2208,6 @@ HTML_UI = r"""<!DOCTYPE html>
       <span aria-hidden="true">🔎</span>
       <input id="chatSearchInput" type="search" placeholder="Search chats…" autocomplete="off" oninput="filterHistory(this.value)" />
     </label>
-
-    <div class="sidebar-section-header">
-      <span class="sidebar-section-title">Tools</span>
-    </div>
-    <nav class="side-tools" aria-label="Tools">
-      <button class="side-tool active" data-tab="chat" onclick="switchTab('chat')">
-        <span class="st-icon" aria-hidden="true">💬</span><span>Chat</span>
-      </button>
-      <button class="side-tool" data-tab="ide" onclick="switchTab('ide'); ideInit();">
-        <span class="st-icon" aria-hidden="true">⌨️</span><span>Code IDE</span>
-      </button>
-      <button class="side-tool" data-tab="gallery" onclick="switchTab('gallery'); loadGallery();">
-        <span class="st-icon" aria-hidden="true">🎨</span><span>Gallery</span>
-      </button>
-      <button class="side-tool" data-tab="editor" onclick="switchTab('editor'); loadEditorPicker();">
-        <span class="st-icon" aria-hidden="true">🖌️</span><span>Image editor</span>
-      </button>
-      <button class="side-tool" data-tab="security" onclick="switchTab('security')">
-        <span class="st-icon" aria-hidden="true">🛡️</span><span>Security</span>
-      </button>
-      <button class="side-tool" data-tab="benchmark" onclick="switchTab('benchmark'); loadBenchmarkModels();">
-        <span class="st-icon" aria-hidden="true">⚡</span><span>Benchmark</span>
-      </button>
-      <button class="side-tool" data-tab="video" onclick="switchTab('video'); loadVideoStudio();">
-        <span class="st-icon" aria-hidden="true">🎬</span><span>Video studio</span>
-      </button>
-    </nav>
 
     <div class="sidebar-section-header">
       <span class="sidebar-section-title">Recent chats</span>
@@ -2608,6 +2637,33 @@ HTML_UI = r"""<!DOCTYPE html>
         </div>
       </div>
     </div>
+
+    <nav class="bottom-nav" aria-label="Tools">
+      <button class="nav-item active" data-tab="chat" onclick="switchTab('chat')" aria-current="page">
+        <span class="nav-icon" aria-hidden="true">💬</span><span class="nav-label">Chat</span>
+      </button>
+      <button class="nav-item" data-tab="ide" onclick="switchTab('ide'); ideInit();">
+        <span class="nav-icon" aria-hidden="true">⌨️</span><span class="nav-label">IDE</span>
+      </button>
+      <button class="nav-item" data-tab="gallery" onclick="switchTab('gallery'); loadGallery();">
+        <span class="nav-icon" aria-hidden="true">🎨</span><span class="nav-label">Gallery</span>
+      </button>
+      <button class="nav-item" data-tab="editor" onclick="switchTab('editor'); loadEditorPicker();">
+        <span class="nav-icon" aria-hidden="true">🖌️</span><span class="nav-label">Editor</span>
+      </button>
+      <button class="nav-item" data-tab="security" onclick="switchTab('security')">
+        <span class="nav-icon" aria-hidden="true">🛡️</span><span class="nav-label">Security</span>
+      </button>
+      <button class="nav-item" data-tab="benchmark" onclick="switchTab('benchmark'); loadBenchmarkModels();">
+        <span class="nav-icon" aria-hidden="true">⚡</span><span class="nav-label">Bench</span>
+      </button>
+      <button class="nav-item" data-tab="video" onclick="switchTab('video'); loadVideoStudio();">
+        <span class="nav-icon" aria-hidden="true">🎬</span><span class="nav-label">Video</span>
+      </button>
+      <button class="nav-item" onclick="openSettings()">
+        <span class="nav-icon" aria-hidden="true">⚙️</span><span class="nav-label">Settings</span>
+      </button>
+    </nav>
   </main>
 
   <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebarOnMobile()"></div>
@@ -2737,14 +2793,18 @@ HTML_UI = r"""<!DOCTYPE html>
 
     function switchTab(name, btn) {
       document.querySelectorAll('.tab-view').forEach(el => el.classList.remove('active'));
-      document.querySelectorAll('.tool-nav-btn, .tool-strip-btn, .side-tool').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tool-nav-btn, .tool-strip-btn, .side-tool, .nav-item').forEach(el => {
+        el.classList.remove('active');
+        if (el.hasAttribute('aria-current')) el.removeAttribute('aria-current');
+      });
       const view = document.getElementById('tab-' + name);
       if (view) view.classList.add('active');
       const target = btn || document.querySelector(`.tool-nav-btn[data-tab="${name}"]`);
       if (target && target.classList) target.classList.add('active');
-      const stripBtn = document.querySelector(`.tool-strip-btn[data-tab="${name}"], .side-tool[data-tab="${name}"]`);
+      const stripBtn = document.querySelector(`.tool-strip-btn[data-tab="${name}"], .side-tool[data-tab="${name}"], .nav-item[data-tab="${name}"]`);
       if (stripBtn) {
         stripBtn.classList.add('active');
+        if (stripBtn.classList.contains('nav-item')) stripBtn.setAttribute('aria-current', 'page');
         try { stripBtn.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (e) {}
       }
       if (name === 'chat') {
