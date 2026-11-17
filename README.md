@@ -131,10 +131,15 @@ static checks actually found.
 - **Sidebar** keeps the conversation side: brand row → **＋ New chat** → chat search →
   **Recent chats** → archived → **⚙️ Settings / 🧠 Models** pinned at the bottom above the
   storage readout.
-- **Touch sizing**: a `(pointer: coarse)` pass grows icon buttons to 42 px, chips and
-  buttons to 40 px, history rows and sidebar actions to 44 px, the send button to 48 px,
-  and sets form fonts to 16 px so iOS does not zoom on focus. Tap highlight is removed and
+- **Touch sizing, always on**: the sidebar is sized for fingers everywhere, not just on
+  phones — New chat 46 px tall, search 44 px, history rows 48 px with 34 px share/archive/
+  delete buttons that stay visible, Archived toggle 42 px, Settings/Models 46 px side by
+  side, engine strip 96 px, header buttons 40 px. A `(pointer: coarse)` pass additionally
+  grows icon buttons to 42 px, chips to 40 px, the send button to 48 px and sets form fonts
+  to 16 px so iOS does not zoom on focus. Tap highlight is removed and
   `touch-action: manipulation` kills the 300 ms double-tap delay.
+- Tapping any row in the sidebar opens that conversation and keeps it highlighted, even
+  when the chat is still empty.
 - **Top bar** stays for device state only: brand, demo chip, Settings, Models, Offline —
   no duplicate tool rows to clip or scroll.
 - **⚙️ Settings** (sidebar, top bar, or `Ctrl+,`): **Benchmark** (accuracy cards, latency,

@@ -1926,6 +1926,60 @@ HTML_UI = r"""<!DOCTYPE html>
       .sidebar .system-strip { padding: 7px 9px; gap: 4px; }
     }
 
+    /* ---------- sidebar: touch sizing ---------- */
+    .sidebar { -webkit-tap-highlight-color: transparent; }
+    .sidebar button,
+    .sidebar .sidebar-search,
+    .sidebar .history-item,
+    .sidebar .archive-toggle { touch-action: manipulation; }
+
+    .sidebar-header { min-height: 52px; }
+    .sidebar-header .icon-btn { width: 40px; height: 40px; font-size: 1.05rem; }
+    .sidebar-brand .brand-text { font-size: 1rem; }
+
+    .sidebar .btn-new-chat,
+    .btn-new-chat.compact {
+      margin: 0 12px 10px;
+      height: auto; min-height: 46px;
+      font-size: .85rem; font-weight: 800;
+    }
+    .sidebar .btn-new-chat span { font-size: .85rem; }
+
+    .sidebar-search {
+      min-height: 44px; padding: 10px 12px; margin: 0 12px 10px;
+      font-size: .9rem;
+    }
+    .sidebar-search span { font-size: 1rem; }
+    .sidebar-search input { font-size: .92rem; }
+
+    .sidebar-section-title { font-size: .68rem; }
+    .clear-all-btn { min-height: 32px; padding: 6px 10px; font-size: .72rem; }
+
+    .history-list { padding: 0 8px 10px; gap: 3px; }
+    .history-item {
+      min-height: 48px; padding: 10px 8px 10px 12px;
+      border-radius: 11px; align-items: center;
+    }
+    .history-item-title { font-size: .85rem; line-height: 1.35; padding: 3px 0; }
+    .history-actions { opacity: .9; transform: none; gap: 2px; }
+    .history-item:hover .history-actions,
+    .history-item.active .history-actions,
+    .history-item:focus-within .history-actions { opacity: 1; transform: none; }
+    .hist-act { width: 34px; height: 34px; font-size: .9rem; border-radius: 9px; }
+
+    .archive-toggle { min-height: 42px; padding: 8px 10px; font-size: .74rem; }
+    .archive-toggle span { font-size: .95rem; }
+    .archive-block { margin: 4px 8px 0; }
+
+    .sidebar-action { min-height: 46px; padding: 10px 12px; font-size: .84rem; }
+    .sidebar-action .sa-icon { font-size: 1.05rem; }
+    .sidebar-action .sa-hint { font-size: .64rem; }
+
+    .system-strip { padding: 11px 12px; min-height: 96px; }
+    .system-strip .ss-row { font-size: .74rem; }
+    .system-strip .progress-bar { height: 7px; }
+    .sidebar-foot { min-height: 40px; font-size: .72rem; }
+
     /* ---------- bottom navigation (touch-first tool switch) ---------- */
     .bottom-nav {
       flex: none; display: flex; align-items: stretch; gap: 2px;
@@ -1981,26 +2035,12 @@ HTML_UI = r"""<!DOCTYPE html>
       .composer-row { gap: 8px; }
     }
 
-    /* ---------- sidebar tool list (ChatGPT-style nav) ---------- */
-    .side-tools { display: flex; flex-direction: column; gap: 1px; padding: 0 6px; flex: none; }
-    .side-tool {
-      display: flex; align-items: center; gap: 10px; width: 100%;
-      padding: 7px 9px; border-radius: 9px; cursor: pointer; text-align: left;
-      background: transparent; border: 1px solid transparent;
-      color: #c2d1df; font-family: inherit; font-size: .8rem; font-weight: 600;
-      transition: background .15s ease, color .15s ease, border-color .15s ease;
-    }
-    .side-tool:hover { background: rgba(148,163,184,.12); color: #fff; }
-    .side-tool.active {
-      background: rgba(16,185,129,.15); border-color: rgba(16,185,129,.38); color: #d8fff3; font-weight: 800;
-    }
-    .side-tool .st-icon { font-size: .92rem; line-height: 1; width: 16px; text-align: center; }
-
     /* ---------- sidebar bottom actions ---------- */
     .sidebar-actions {
-      display: flex; flex-direction: column; gap: 2px;
-      margin: 6px 6px 0; padding-top: 6px; border-top: 1px solid var(--border-subtle);
+      display: flex; flex-direction: row; gap: 6px;
+      margin: 6px 8px 0; padding-top: 8px; border-top: 1px solid var(--border-subtle);
     }
+    .sidebar-actions .sidebar-action { flex: 1 1 0; justify-content: center; gap: 6px; }
     .sidebar-action {
       display: flex; align-items: center; gap: 9px; width: 100%;
       padding: 8px 9px; border-radius: 9px; cursor: pointer;
@@ -2014,6 +2054,7 @@ HTML_UI = r"""<!DOCTYPE html>
       margin-left: auto; font-size: .62rem; font-weight: 600; color: #7b8b9c;
       font-family: var(--font-mono);
     }
+    .sidebar-actions .sa-hint { display: none; }
 
     /* ---------- settings ---------- */
     .settings-panel { max-width: 860px; }
@@ -3033,6 +3074,8 @@ HTML_UI = r"""<!DOCTYPE html>
       box.innerHTML = '';
       if (chat.messages.length === 0) {
         newChat();
+        currentChatId = id;     // keep the tapped row selected so it is obvious what opened
+        renderHistory();
         return;
       }
       chat.messages.forEach((m, idx) => {
