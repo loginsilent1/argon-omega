@@ -1,0 +1,10 @@
+models/
+bin/
+ssd_images/
+__pycache__/
+*.gguf
+*.part
+*.db
+*.db-wal
+*.db-shm
+*.pyc
