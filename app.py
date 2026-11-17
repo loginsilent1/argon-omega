@@ -2278,6 +2278,24 @@ HTML_UI = r"""<!DOCTYPE html>
     .set-cards { gap: 6px; }
     .set-card { padding: 8px 10px; }
 
+    /* ---------- pinned sidebar bottom row ----------
+       The chat list is the only scroller in the rail. Settings/Models and the offline note
+       sit at the bottom for good, so adding chats, filtering or opening the tools drawer
+       never nudges them. */
+    .sidebar { display: flex; flex-direction: column; overflow: hidden; overscroll-behavior: contain; }
+    .sidebar > .history-list {
+      flex: 1 1 auto; min-height: 56px; max-height: none;
+      overflow-y: auto; overflow-x: hidden; overscroll-behavior: contain;
+    }
+    .sidebar > .sidebar-actions { flex: 0 0 auto; margin-top: auto; position: relative; z-index: 2; }
+    .sidebar > .sidebar-foot { flex: 0 0 auto; position: relative; z-index: 2; }
+    .sidebar > .archive-block { flex: 0 0 auto; max-height: 32vh; overflow-y: auto; }
+    @media (max-height: 520px) {
+      /* very short windows: fall back to scrolling the whole rail, never clip it */
+      .sidebar { overflow-y: auto; }
+      .sidebar > .history-list { max-height: 40vh; }
+    }
+
     /* ---------- mobile drawer (last word: it must win over the desktop panel rules) ---------- */
     @media (max-width: 820px) {
       .sidebar {
@@ -2933,7 +2951,7 @@ HTML_UI = r"""<!DOCTYPE html>
 
     function pushRoute(path, replace = false) {
       if (routeSilent) return;
-      if (location.pathname + location.search === path) return;
+      if (location.pathname + location.search + location.hash === path) return;
       try {
         history[replace ? 'replaceState' : 'pushState']({ path }, '', path);
       } catch (e) {}
@@ -2971,6 +2989,8 @@ HTML_UI = r"""<!DOCTYPE html>
       if (tab) {
         switchTab(tab, null, { silent: true });
         setDocTitle(NAV_TITLE[tab]);
+        // /chat#chat-<id> re-opens that conversation (refresh, deep link, back/forward)
+        if (tab === 'chat' && /^#chat-/.test(location.hash)) openChatFromHash();
       } else {
         setDocTitle('');
       }
@@ -3005,7 +3025,8 @@ HTML_UI = r"""<!DOCTYPE html>
       if (window.innerWidth <= 820) closeSidebarOnMobile();
       try { localStorage.setItem('argon_last_tab', name); } catch (e) {}
       if (!silent) {
-        pushRoute(TAB_URL[name] || '/chat');
+        const base = TAB_URL[name] || '/chat';
+        pushRoute(opts && opts.hash ? base + '#' + opts.hash : base);
         setDocTitle(NAV_TITLE[name] || '');
       }
     }
@@ -3175,7 +3196,7 @@ HTML_UI = r"""<!DOCTYPE html>
       const chat = chats.find(c => c.id === id);
       if (!chat) { toast('That shared chat is not on this machine anymore', 'info'); return false; }
       if (chat.archived) chat.archived = false;
-      loadChat(id);
+      loadChat(id, { silent: true });
       return true;
     }
 
@@ -3208,7 +3229,12 @@ HTML_UI = r"""<!DOCTYPE html>
       newChat();
     }
 
-    function newChat() {
+    function newChat(opts) {
+      const silent = !!(opts && opts.silent) || routeSilent;
+      if (!silent) {
+        if (document.getElementById('tab-chat')?.classList.contains('active')) pushRoute('/chat');
+        else switchTab('chat');
+      }
       currentChatId = null;
       const box = document.getElementById('chatBox');
       box.innerHTML = welcomeMarkup();
@@ -3218,14 +3244,22 @@ HTML_UI = r"""<!DOCTYPE html>
       promptInput.focus();
     }
 
-    function loadChat(id) {
+    function loadChat(id, opts) {
       const chat = chats.find(c => c.id === id);
       if (!chat) return;
+      const silent = !!(opts && opts.silent) || routeSilent;
+      if (!silent) {
+        // Opening a chat (from the list, after a search, from Archived) must land on the Chat
+        // screen with a URL that matches it, so a reload brings the same conversation back.
+        const hash = 'chat-' + encodeURIComponent(id);
+        if (document.getElementById('tab-chat')?.classList.contains('active')) pushRoute('/chat#' + hash);
+        else switchTab('chat', null, { hash });
+      }
       currentChatId = id;
       const box = document.getElementById('chatBox');
       box.innerHTML = '';
       if (chat.messages.length === 0) {
-        newChat();
+        newChat({ silent: true });
         currentChatId = id;     // keep the tapped row selected so it is obvious what opened
         renderHistory();
         return;

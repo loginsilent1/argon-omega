@@ -149,8 +149,16 @@ static checks actually found.
   `/settings?tab=benchmark|engine|security|workspace` and `/models`. The title follows the
   screen (`ARGON-OMEGA · Code IDE`), switching a screen pushes a history entry, and the
   server answers those paths with the same single-file app (unknown paths still 404).
+- **A conversation has its own URL too**: opening a chat — from the list, after searching,
+  or from Archived — lands on `/chat#chat-<id>`, so a reload (or a shared link) re-opens
+  that exact chat. Searching the chat list only filters while you type and never rewrites
+  the URL; picking a result is what moves you to `/chat`.
 - **Top bar is minimal**: brand, demo chip and the offline toggle only — Models and Settings
   are not up there any more.
+- **The bottom row never moves**: the chat list is the only thing that scrolls inside the
+  rail, so the Settings/Models buttons and the offline note stay pinned at the bottom
+  whatever the chat count, filter or tools-drawer state (very short windows fall back to
+  scrolling the rail so nothing gets clipped).
 - **Sidebar bottom is two icon buttons** (⚙️ Settings, 🧠 Models) with tooltips/aria-labels,
   and the SSD ROM / engine readout block is gone from the sidebar (engine + storage facts
   live in Settings → Engine / Workspace).
