@@ -1474,13 +1474,6 @@ HTML_UI = r"""<!DOCTYPE html>
     }
     .history-item:hover .history-del-btn, .history-item.active .history-del-btn { opacity: 1; }
     .history-del-btn:hover { background: rgba(248,113,113,.18); color: #fca5a5; }
-    #terminalDrawer {
-      background: linear-gradient(180deg, rgba(9,13,22,.98), rgba(6,9,15,.99)) !important;
-      border: 1px solid rgba(16,185,129,.28) !important;
-      border-radius: 16px !important;
-      box-shadow: var(--shadow-1);
-    }
-    #drawerOutput { border-radius: 10px !important; }
     .sub-metric { font-size: .7rem; color: var(--text-muted); }
     .card-row { align-items: baseline; }
 
@@ -1543,6 +1536,380 @@ HTML_UI = r"""<!DOCTYPE html>
       padding: 4px 7px; font-size: .72rem; color: var(--text);
     }
 
+
+    /* ==================================================================
+       ARGON v3 — compact shell, sidebar tools, Arena-style sandbox
+       ================================================================== */
+
+    /* ---------- sidebar: compact controls ---------- */
+    .sidebar .btn-new-chat,
+    .btn-new-chat.compact {
+      margin: 0 12px 10px;
+      height: 32px;
+      padding: 0 10px;
+      font-size: .76rem;
+      font-weight: 700;
+      border-radius: 9px;
+      display: inline-flex;
+      align-items: center;
+      justify-content: center;
+      gap: 6px;
+      width: calc(100% - 24px);
+    }
+    .btn-new-chat.compact span { font-size: .76rem; }
+
+    .history-item {
+      display: flex;
+      align-items: center;
+      gap: 4px;
+      padding: 7px 6px 7px 10px;
+    }
+    .history-item-title {
+      flex: 1;
+      min-width: 0;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: .8rem;
+    }
+    .history-actions {
+      display: flex;
+      gap: 1px;
+      opacity: 0;
+      transform: translateX(3px);
+      transition: opacity .14s ease, transform .14s ease;
+    }
+    .history-item:hover .history-actions,
+    .history-item.active .history-actions,
+    .history-item:focus-within .history-actions { opacity: 1; transform: none; }
+    .hist-act {
+      width: 24px; height: 24px;
+      display: grid; place-items: center;
+      border: none; border-radius: 7px;
+      background: transparent; color: var(--text-muted);
+      font-size: .74rem; line-height: 1; cursor: pointer;
+      transition: background .14s ease, color .14s ease;
+    }
+    .hist-act:hover { background: rgba(148,163,184,.16); color: #fff; }
+    .hist-act.danger:hover { background: rgba(248,113,113,.18); color: #fca5a5; }
+    .hist-act.ok:hover { background: rgba(16,185,129,.2); color: #6ee7b7; }
+    @media (hover: none) {
+      .history-actions { opacity: .85; transform: none; }
+    }
+
+    .archive-block { margin: 6px 10px 0; padding-top: 6px; border-top: 1px solid var(--border-subtle); }
+    .archive-toggle {
+      display: flex; align-items: center; gap: 6px; width: 100%;
+      padding: 6px 8px; border: none; border-radius: 8px; background: transparent;
+      color: var(--text-muted); font-size: .68rem; font-weight: 700;
+      letter-spacing: .1em; text-transform: uppercase; cursor: pointer;
+    }
+    .archive-toggle:hover { background: rgba(148,163,184,.09); color: var(--text); }
+    .archive-count {
+      background: rgba(148,163,184,.18); border-radius: 99px;
+      padding: 1px 6px; font-size: .62rem; letter-spacing: 0; color: #cfdae8;
+    }
+    .archive-list { display: none; flex-direction: column; gap: 2px; padding: 2px 0 4px; }
+    .archive-list.open { display: flex; }
+    .archive-list .history-item { opacity: .82; }
+    .history-empty { padding: 8px 12px; font-size: .74rem; color: var(--text-muted); line-height: 1.5; }
+
+    .tool-nav {
+      display: flex; flex-direction: column; gap: 1px;
+      margin: 8px 10px 0; padding-top: 8px; border-top: 1px solid var(--border-subtle);
+    }
+    .tool-nav .sidebar-section-title { padding: 0 8px 4px; }
+    .tool-nav-btn {
+      display: flex; align-items: center; gap: 9px;
+      padding: 7px 9px; border-radius: 9px;
+      border: 1px solid transparent; background: transparent;
+      color: #c2d0e0; font-size: .79rem; font-weight: 600;
+      font-family: inherit; text-align: left; cursor: pointer;
+      min-height: 34px;
+      transition: background .15s ease, color .15s ease, border-color .15s ease;
+    }
+    .tool-nav-btn .ico { width: 18px; text-align: center; font-size: .86rem; flex: none; }
+    .tool-nav-btn:hover { background: rgba(148,163,184,.1); color: #fff; }
+    .tool-nav-btn.active {
+      background: rgba(16,185,129,.13);
+      border-color: rgba(16,185,129,.34);
+      color: #dcfff2;
+    }
+    .tool-nav-btn .kbd-mini {
+      margin-left: auto; font-family: var(--font-mono); font-size: .6rem;
+      color: var(--text-muted); opacity: .8;
+    }
+
+    .system-strip {
+      margin: 8px 10px 0; padding: 9px 10px; cursor: pointer;
+      border-radius: 11px; border: 1px solid var(--border-subtle);
+      background: linear-gradient(180deg, rgba(148,163,184,.07), rgba(148,163,184,.03));
+      display: flex; flex-direction: column; gap: 5px;
+      transition: border-color .16s ease, background .16s ease;
+    }
+    .system-strip:hover { border-color: rgba(16,185,129,.3); background: rgba(16,185,129,.06); }
+    .system-strip .ss-row {
+      display: flex; align-items: center; justify-content: space-between; gap: 8px;
+      font-size: .66rem; color: var(--text-muted); letter-spacing: .02em;
+    }
+    .system-strip .ss-row strong { color: #dbe7f3; font-size: .7rem; font-variant-numeric: tabular-nums; }
+    .system-strip .progress-bar { height: 4px; }
+    .system-strip .engine { display: inline-flex; align-items: center; gap: 5px; }
+    .system-strip .engine-dot {
+      width: 6px; height: 6px; border-radius: 50%; background: var(--accent);
+      box-shadow: 0 0 0 3px rgba(16,185,129,.16);
+    }
+    .system-strip .engine-dot.demo { background: #fbbf24; box-shadow: 0 0 0 3px rgba(251,191,36,.16); }
+
+    /* ---------- top bar: one clean row ---------- */
+    .topbar {
+      display: flex; align-items: center; gap: 8px; flex-wrap: nowrap;
+      padding: 8px 12px;
+    }
+    .topbar .topbar-spacer { flex: 1; }
+    .topbar .brand-mark {
+      width: 22px; height: 22px; border-radius: 7px; display: grid; place-items: center;
+      background: var(--grad-brand); color: #04120c; font-size: .72rem; font-weight: 900;
+    }
+    .model-pill { display: inline-flex; align-items: center; gap: 7px; padding: 4px 10px; font-size: .8rem; }
+    .model-pill span.tag { background: rgba(16,185,129,.16); color: #8af5cd; border: 1px solid rgba(16,185,129,.32); }
+    .chip-btn {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 6px 10px; border-radius: 9px; min-height: 32px;
+      border: 1px solid var(--border-subtle); background: rgba(148,163,184,.07);
+      color: #cfdae8; font-size: .74rem; font-weight: 600; font-family: inherit; cursor: pointer;
+      transition: background .15s ease, border-color .15s ease, color .15s ease;
+    }
+    .chip-btn:hover { background: rgba(148,163,184,.15); color: #fff; border-color: var(--border); }
+    .chip-btn.accent { border-color: rgba(16,185,129,.34); color: #8af5cd; }
+    .chip-btn.on { border-color: rgba(16,185,129,.5); color: #6ee7b7; background: rgba(16,185,129,.12); }
+    #offlineModeBtn { padding: 6px 9px; }
+
+    /* ---------- composer: model picker lives here ---------- */
+    .composer-tools { gap: 5px; }
+    .composer-tools .model-select {
+      max-width: 168px; min-height: 28px;
+      font-size: .7rem; font-weight: 600;
+      padding: 3px 6px; border-radius: 8px;
+      background: rgba(9,13,19,.92);
+      border: 1px solid var(--border-subtle);
+      color: #cfdae8;
+    }
+    .composer-tools .model-select:hover { border-color: rgba(34,211,238,.4); }
+    .composer-tools select { min-height: 28px; }
+    .tool-btn { min-height: 30px; }
+    @media (max-width: 560px) {
+      .composer-tools .t-label { display: none; }
+      .composer-tools .model-select { max-width: 116px; }
+    }
+
+    /* ---------- sandbox: editor + run panel like a hosted playground ---------- */
+    .sandbox-shell {
+      display: flex; flex-direction: column; gap: 10px;
+      width: 100%; max-width: 1400px; margin: 0 auto;
+      padding: 12px; height: 100%; min-height: 0;
+    }
+    .sandbox-head { display: flex; align-items: center; gap: 8px; flex-wrap: wrap; }
+    .sandbox-modes {
+      display: inline-flex; gap: 2px; padding: 3px;
+      background: rgba(148,163,184,.09); border: 1px solid var(--border-subtle);
+      border-radius: 10px;
+    }
+    .sandbox-mode {
+      padding: 5px 12px; border: none; border-radius: 8px; cursor: pointer;
+      background: transparent; color: var(--text-muted);
+      font-size: .75rem; font-weight: 700; font-family: inherit;
+      transition: background .15s ease, color .15s ease;
+    }
+    .sandbox-mode:hover { color: var(--text); }
+    .sandbox-mode.active {
+      background: linear-gradient(135deg, rgba(16,185,129,.92), rgba(13,148,136,.88));
+      color: #04120c;
+      box-shadow: 0 6px 16px -12px rgba(16,185,129,.9);
+    }
+    .sandbox-actions { margin-left: auto; display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .sandbox-actions .btn-firehose { padding: 7px 14px; font-size: .78rem; }
+
+    .sandbox-body {
+      display: grid; grid-template-columns: 1.05fr 1fr; gap: 10px;
+      flex: 1; min-height: 0;
+    }
+    .sandbox-pane {
+      display: flex; flex-direction: column; min-height: 300px; overflow: hidden;
+      border: 1px solid var(--border-subtle); border-radius: 14px;
+      background: rgba(9,13,19,.62);
+      box-shadow: var(--shadow-1);
+    }
+    .pane-head {
+      display: flex; align-items: center; gap: 8px; flex-wrap: wrap;
+      padding: 6px 10px; min-height: 34px;
+      background: rgba(148,163,184,.06);
+      border-bottom: 1px solid var(--border-subtle);
+      font-size: .68rem; font-weight: 700; letter-spacing: .08em;
+      text-transform: uppercase; color: var(--text-muted);
+    }
+    .pane-head .file {
+      font-family: var(--font-mono); font-size: .74rem; font-weight: 600;
+      letter-spacing: 0; text-transform: none; color: #cfe3f5;
+    }
+    .pane-head .pane-meta { margin-left: auto; font-family: var(--font-mono); font-size: .64rem; letter-spacing: 0; }
+    .editor-wrap { display: flex; flex: 1; min-height: 0; overflow: hidden; }
+    #sandboxLineNums {
+      margin: 0; padding: 10px 8px 10px 10px; text-align: right;
+      color: #46586c; background: rgba(2,6,12,.45);
+      border-right: 1px solid var(--border-subtle);
+      font-family: var(--font-mono); font-size: .78rem; line-height: 1.62;
+      user-select: none; overflow: hidden; min-width: 40px;
+    }
+    #sandboxEditor {
+      flex: 1; min-width: 0; width: 100%;
+      background: transparent; border: none; outline: none; resize: none;
+      padding: 10px 12px; color: #e3ecf7;
+      font-family: var(--font-mono); font-size: .8rem; line-height: 1.62;
+      white-space: pre; overflow: auto; tab-size: 4;
+    }
+    #sandboxEditor::placeholder { color: #5b6d82; }
+    .out-tabs { display: inline-flex; gap: 3px; margin-left: auto; }
+    .out-tab {
+      border: none; background: transparent; cursor: pointer;
+      color: var(--text-muted); font-family: inherit;
+      font-size: .66rem; font-weight: 700; letter-spacing: .04em;
+      padding: 3px 8px; border-radius: 7px; text-transform: none;
+    }
+    .out-tab:hover { color: var(--text); }
+    .out-tab.active { background: rgba(34,211,238,.15); color: #a5f3fc; }
+    .run-status { font-family: var(--font-mono); font-size: .64rem; letter-spacing: 0; text-transform: none; }
+    .run-status.idle { color: var(--text-muted); }
+    .run-status.running { color: #7dd3fc; }
+    .run-status.ok { color: #6ee7b7; }
+    .run-status.err { color: #fca5a5; }
+    #sandboxConsole {
+      flex: 1; min-height: 120px; margin: 0; padding: 10px 12px; overflow: auto;
+      background: transparent; border: none;
+      font-family: var(--font-mono); font-size: .78rem; line-height: 1.6;
+      color: #cfe3f5; white-space: pre-wrap; word-break: break-word;
+    }
+    #sandboxConsole .con-dim { color: #7b8ea3; }
+    #sandboxConsole .con-ok { color: #6ee7b7; }
+    #sandboxConsole .con-err { color: #fca5a5; }
+    #sandboxFrame {
+      flex: 1; width: 100%; min-height: 140px; border: none;
+      background: #fff; display: none;
+    }
+    .term-row {
+      display: flex; align-items: center; gap: 8px;
+      padding: 7px 10px; border-top: 1px solid var(--border-subtle);
+      background: rgba(2,6,12,.5);
+    }
+    .term-row .prompt {
+      font-family: var(--font-mono); font-size: .74rem; color: #34d399; white-space: nowrap;
+    }
+    .term-row input {
+      flex: 1; min-width: 0; background: transparent; border: none; outline: none;
+      color: #e3ecf7; font-family: var(--font-mono); font-size: .78rem;
+    }
+    .sandbox-templates {
+      display: flex; align-items: center; gap: 6px; flex-wrap: wrap;
+      padding-top: 2px;
+    }
+    .sandbox-templates .tpl-label {
+      font-size: .66rem; text-transform: uppercase; letter-spacing: .1em;
+      color: var(--text-muted); font-weight: 700; margin-right: 2px;
+    }
+    .tpl-chip {
+      display: inline-flex; align-items: center; gap: 5px;
+      padding: 5px 9px; border-radius: 8px; cursor: pointer; min-height: 28px;
+      border: 1px solid var(--border-subtle); background: rgba(148,163,184,.07);
+      color: #c7d5e4; font-family: inherit; font-size: .72rem; font-weight: 600;
+      transition: background .15s ease, border-color .15s ease, transform .15s ease;
+    }
+    .tpl-chip:hover { background: rgba(148,163,184,.15); border-color: var(--border); transform: translateY(-1px); }
+
+    /* ---------- share modal ---------- */
+    .share-body { padding: 12px 18px; display: flex; }
+    #shareText {
+      width: 100%; min-height: 220px; max-height: 46vh; resize: vertical;
+      background: rgba(2,6,12,.65); color: #cfe3f5;
+      border: 1px solid var(--border-subtle); border-radius: 10px;
+      padding: 10px 12px; font-family: var(--font-mono); font-size: .74rem; line-height: 1.55;
+    }
+    .models-foot .foot-actions { display: flex; gap: 6px; flex-wrap: wrap; }
+
+    /* ---------- v3.1 bits ---------- */
+    .sidebar-header {
+      display: flex; align-items: center; justify-content: space-between;
+      gap: 8px; padding: 12px 12px 6px;
+    }
+    .sidebar-brand { display: flex; align-items: center; gap: 8px; min-width: 0; }
+    .sidebar-brand .orb { font-size: 1rem; color: #34d399; }
+    .sidebar-brand .brand-text {
+      display: flex; flex-direction: column; min-width: 0;
+      font-size: .78rem; font-weight: 800; letter-spacing: .1em; color: #e6f1ff;
+    }
+    .sidebar-brand .brand-text small {
+      font-size: .58rem; font-weight: 600; letter-spacing: .14em;
+      text-transform: uppercase; color: #64798f;
+    }
+    .sidebar-section-header { display: flex; align-items: center; justify-content: space-between; padding: 8px 12px 4px; }
+    .sidebar-section-title {
+      font-size: .62rem; font-weight: 800; letter-spacing: .16em;
+      text-transform: uppercase; color: #64798f;
+    }
+    .sidebar-foot {
+      display: flex; align-items: center; gap: 6px;
+      padding: 8px 12px 10px; margin-top: auto;
+      font-size: .6rem; color: #5c7085; border-top: 1px solid var(--border-subtle);
+    }
+    .sidebar-foot .dot {
+      width: 6px; height: 6px; border-radius: 50%; background: #22c55e;
+      box-shadow: 0 0 0 3px rgba(34,197,94,.14); flex: none;
+    }
+    .history-item.archived { opacity: .78; }
+    .tpl-hint {
+      font-size: .62rem; font-weight: 800; letter-spacing: .14em;
+      text-transform: uppercase; color: #64798f; margin-right: 2px;
+    }
+    .sandbox-templates { overflow-x: auto; scrollbar-width: thin; }
+    #tab-sandbox { overflow-y: auto; }
+    #tab-sandbox .sandbox-shell { min-height: min(720px, calc(100vh - 140px)); }
+    @media (max-width: 820px) {
+      .sandbox-shell { height: auto; }
+      .sandbox-body { grid-template-columns: 1fr; }
+      .sandbox-pane { min-height: 240px; }
+      #sandboxEditor, #sandboxLineNums { font-size: .74rem; }
+    }
+
+    /* ---------- mobile ---------- */
+    @media (max-width: 900px) {
+      .sandbox-body { grid-template-columns: 1fr; }
+      .sandbox-pane { min-height: 240px; }
+      .sandbox-shell { padding: 10px; }
+    }
+    @media (max-width: 820px) {
+      .topbar { padding: 7px 10px; gap: 6px; }
+      .topbar .brand-name { display: none; }
+      .chip-btn { padding: 6px 8px; font-size: .72rem; }
+      .chip-btn .t-label { display: none; }
+      .topbar .brand-name { display: none; }
+      .sidebar { width: min(86vw, 320px); }
+      .chat-scroll { padding: 12px 10px 6px; }
+      .input-wrapper { padding: 8px 10px max(12px, env(safe-area-inset-bottom)); }
+      .composer { padding: 9px 10px 7px; border-radius: 16px; }
+      .composer textarea { font-size: .9rem; }
+      .composer-hint { font-size: .64rem; }
+      .suggestion-grid { grid-template-columns: 1fr; }
+      .tool-nav-btn { min-height: 38px; }
+      .btn-new-chat.compact { height: 34px; }
+      .models-panel { max-height: 92vh; }
+      .models-head { flex-wrap: wrap; }
+      .models-foot { flex-wrap: wrap; gap: 8px; }
+    }
+    @media (max-width: 480px) {
+      .top-chip { display: none !important; }
+      .model-pill span:not(.brand-mark) { font-size: .74rem; }
+      .send-btn { width: 36px; height: 36px; }
+      .pane-head .pane-meta { display: none; }
+    }
   </style>
 </head>
 <body>
@@ -1555,38 +1922,64 @@ HTML_UI = r"""<!DOCTYPE html>
       <button class="icon-btn" onclick="toggleSidebar()" title="Close sidebar (Ctrl+B)">☰</button>
     </div>
 
-    <button class="btn-new-chat" style="margin:0 12px 10px;" onclick="newChat()">
-      <span>＋</span> New chat
+    <button class="btn-new-chat compact" onclick="newChat()" title="New chat (Ctrl+Shift+O)">
+      <span aria-hidden="true">＋</span><span>New chat</span>
     </button>
 
     <label class="sidebar-search" for="chatSearchInput">
-      <span>🔎</span>
-      <input id="chatSearchInput" type="text" placeholder="Search chats…" autocomplete="off" oninput="filterHistory(this.value)" />
+      <span aria-hidden="true">🔎</span>
+      <input id="chatSearchInput" type="search" placeholder="Search chats…" autocomplete="off" oninput="filterHistory(this.value)" />
     </label>
 
     <div class="sidebar-section-header">
       <span class="sidebar-section-title">Recent chats</span>
-      <button class="clear-all-btn" onclick="clearAllChats()" title="Delete all chats">Clear all</button>
     </div>
     <div class="history-list" id="historyList"></div>
 
-    <div class="telemetry-stack">
-      <div class="card">
-        <div class="card-row">
-          <span class="card-label">SSD ROM</span>
-          <span class="metric" id="romSize" style="font-size:0.8rem;">0.00 MB</span>
-        </div>
-        <div class="progress-bar"><div class="progress-fill" id="romProgress"></div></div>
-        <div class="sub-metric" id="totalRows">Brains: 0 • Memories: <span id="memoryRows">0</span></div>
-      </div>
-      <div class="card" style="padding:9px 12px;cursor:pointer;" onclick="openModels()" title="Manage models">
-        <div class="card-row">
-          <span class="card-label">Engine</span>
-          <span class="metric" id="engineState" style="font-size:0.72rem;">checking…</span>
-        </div>
-        <div class="sub-metric" id="engineDetail" style="margin-top:4px;">—</div>
-      </div>
+    <div class="archive-block" id="archiveBlock" style="display:none;">
+      <button class="archive-toggle" onclick="toggleArchiveList()" aria-expanded="false" id="archiveToggle">
+        <span aria-hidden="true">📦</span><span>Archived</span>
+        <span class="archive-count" id="archiveCount">0</span>
+        <span style="margin-left:auto;" id="archiveCaret">▾</span>
+      </button>
+      <div class="archive-list" id="archiveList"></div>
     </div>
+
+    <nav class="tool-nav" aria-label="Tools">
+      <div class="sidebar-section-title">Tools</div>
+      <button class="tool-nav-btn active" data-tab="chat" onclick="switchTab('chat', this)">
+        <span class="ico" aria-hidden="true">💬</span>Chat
+      </button>
+      <button class="tool-nav-btn" data-tab="sandbox" onclick="switchTab('sandbox', this)">
+        <span class="ico" aria-hidden="true">🧪</span>Sandbox &amp; Terminal
+      </button>
+      <button class="tool-nav-btn" data-tab="gallery" onclick="switchTab('gallery', this); loadGallery();">
+        <span class="ico" aria-hidden="true">🎨</span>Image gallery
+      </button>
+      <button class="tool-nav-btn" data-tab="editor" onclick="switchTab('editor', this); loadEditorPicker();">
+        <span class="ico" aria-hidden="true">🖌️</span>Image editor
+      </button>
+      <button class="tool-nav-btn" data-tab="security" onclick="switchTab('security', this)">
+        <span class="ico" aria-hidden="true">🛡️</span>Security lab
+      </button>
+      <button class="tool-nav-btn" data-tab="benchmark" onclick="switchTab('benchmark', this); loadBenchmarkModels();">
+        <span class="ico" aria-hidden="true">⚡</span>Benchmark
+      </button>
+      <button class="tool-nav-btn" data-tab="video" onclick="switchTab('video', this); loadVideoStudio();">
+        <span class="ico" aria-hidden="true">🎬</span>Video studio
+      </button>
+    </nav>
+
+    <div class="system-strip" onclick="openModels()" title="Manage models &amp; storage">
+      <div class="ss-row"><span>SSD ROM</span><strong id="romSize">0.00 MB</strong></div>
+      <div class="progress-bar"><div class="progress-fill" id="romProgress"></div></div>
+      <div class="ss-row">
+        <span class="engine"><span class="engine-dot" id="engineDot"></span><span id="engineState">checking…</span></span>
+        <span id="totalRows">Brains: 0</span>
+      </div>
+      <div class="ss-row"><span id="engineDetail" style="font-size:.62rem;">—</span></div>
+    </div>
+
     <div class="sidebar-foot">
       <span class="dot"></span>
       <span id="sidebarFootText">100% offline · nothing leaves this machine</span>
@@ -1595,46 +1988,16 @@ HTML_UI = r"""<!DOCTYPE html>
 
   <main class="main">
     <header class="topbar">
-      <div class="topbar-left">
-        <button class="icon-btn" id="openSidebarBtn" onclick="toggleSidebar()" title="Open sidebar" style="display:none;">☰</button>
-        <div class="model-pill" onclick="newChat()">
-          <span>ARGON-OMEGA</span>
-          <span class="tag">99.9% SSD ROM</span>
-        </div>
-        <span class="top-chip" id="demoChip" style="display:none;" title="No GGUF installed — replies are simulated locally">🧪 Demo Brain</span>
+      <button class="icon-btn" id="openSidebarBtn" onclick="toggleSidebar()" title="Open sidebar (Ctrl+B)" style="display:none;">☰</button>
+      <div class="model-pill" onclick="newChat()" title="Start a new chat">
+        <span class="brand-mark" aria-hidden="true">✦</span>
+        <span class="brand-name">ARGON-OMEGA</span>
+        <span class="tag">OFFLINE</span>
       </div>
-      <div class="topbar-controls" style="display:flex; gap:8px; align-items:center; flex-wrap:wrap; width:100%;">
-        <span style="font-size:0.75rem;color:var(--text-secondary);">🧠 Brain:</span>
-        <select id="brainSelect" onchange="selectBrain()" style="max-width:430px;">
-          <option value="auto">⚡ Auto (Qwen Coder + Phi-4 Math/Logic + Gemma General/Fast)</option>
-          <option value="qwen2.5-coder-7b-instruct-q4_k_m.gguf">💻 qwen2.5-coder-7b-instruct-q4_k_m.gguf (7B Fast Daily Coder)</option>
-          <option value="qwen2.5-coder-32b-instruct-IQ3_XS.gguf">🏗️ qwen2.5-coder-32b-instruct-IQ3_XS.gguf (32B Architect Coder)</option>
-          <option value="Phi-4-mini-instruct-Q4_K_M.gguf">🧮 Phi-4-mini-instruct-Q4_K_M.gguf (3.8B Fast Math &amp; Logic)</option>
-          <option value="phi-4-Q4_K_M.gguf">🧠 phi-4-Q4_K_M.gguf (14B Deep Math &amp; Algorithms)</option>
-          <option value="gemma-3-4b-it-Q4_K_M.gguf">🌐 gemma-3-4b-it-Q4_K_M.gguf (4B General &amp; Multilingual)</option>
-          <option value="gemma-3-1b-it-Q4_K_M.gguf">⚡ gemma-3-1b-it-Q4_K_M.gguf (1B Fast Router &amp; Terminal)</option>
-        </select>
-        <span style="font-size:0.75rem;color:var(--text-secondary);">🌐 Language:</span>
-        <select id="langSelect" onchange="selectLanguage()" style="max-width:160px;">
-          <option value="auto">🌐 Auto-Detect</option>
-          <option value="en">English</option>
-          <option value="ne">नेपाली (Nepali)</option>
-          <option value="romanized_ne">Romanized Nepali</option>
-          <option value="hi">हिन्दी (Hindi)</option>
-          <option value="es">Español</option>
-          <option value="fr">Français</option>
-          <option value="zh-CN">中文 (Chinese)</option>
-        </select>
-        <button class="btn-subtle" id="offlineModeBtn" onclick="toggleOfflineMode()" style="width:auto;padding:6px 10px;border-color:#10b981;color:#10b981;font-weight:700;">✈️ OFFLINE ONLY</button>
-      </div>
-      <div class="tabs">
-        <button class="tab-btn active" onclick="switchTab('chat', this)">💬 Chat</button>
-        <button class="tab-btn" id="sandboxTabBtn" onclick="switchTab('sandbox', this)">🧪 Sandbox &amp; Terminal</button>
-        <button class="tab-btn" onclick="switchTab('gallery', this); loadGallery();">🎨 SSD Image Gallery</button>
-        <button class="tab-btn" onclick="switchTab('editor', this); loadEditorPicker();">🖌️ Image Editor</button>
-        <button class="tab-btn" onclick="switchTab('security', this)">🛡️ Security Lab</button>
-        <button class="tab-btn" onclick="switchTab('benchmark', this); loadBenchmarkModels();">⚡ AI Benchmark</button>
-      </div>
+      <span class="top-chip" id="demoChip" style="display:none;" title="No GGUF installed — replies are simulated locally">🧪 Demo</span>
+      <span class="topbar-spacer"></span>
+      <button class="chip-btn accent" onclick="openModels()" title="Models &amp; storage">🧠 <span class="t-label">Models</span></button>
+      <button class="chip-btn" id="offlineModeBtn" onclick="toggleOfflineMode()" title="Offline mode">✈️ <span class="t-label">Offline</span></button>
     </header>
 
     <!-- CHAT TAB -->
@@ -1671,28 +2034,6 @@ HTML_UI = r"""<!DOCTYPE html>
       <button type="button" id="scrollFab" class="scroll-fab" onclick="jumpToBottom()" title="Scroll to latest message">↓</button>
 
       <div class="input-wrapper">
-        <div id="terminalDrawer" style="display:none;max-width:768px;margin:0 auto 10px;background:#090d16;border:1px solid rgba(16,185,129,0.4);border-radius:14px;padding:10px 12px;font-family:ui-monospace,Consolas,monospace;">
-          <div style="display:flex;justify-content:space-between;align-items:center;margin-bottom:8px;gap:8px;flex-wrap:wrap;">
-            <span style="font-size:0.78rem;color:#34d399;font-weight:700;">💻 Read-Only Terminal &amp; Python Sandbox</span>
-            <div id="drawerQuickCmds" style="display:flex;gap:6px;flex-wrap:wrap;">
-              <button type="button" class="tool-btn" onclick="runDrawerCmd('terminal','whoami')">$ whoami</button>
-            </div>
-          </div>
-          <div style="display:flex;gap:8px;margin-bottom:8px;">
-            <select id="drawerMode" style="max-width:120px;font-size:0.78rem;">
-              <option value="terminal">$ Terminal</option>
-              <option value="python">🐍 Python</option>
-            </select>
-            <input id="drawerInput" type="text" placeholder="Enter read-only command (e.g. ipconfig) or Python snippet..." style="flex:1;font-family:ui-monospace,Consolas,monospace;font-size:0.8rem;" onkeydown="if(event.key==='Enter'){event.preventDefault();runDrawerCmd();}" />
-            <button type="button" class="btn-subtle" onclick="runDrawerCmd()" style="background:#065f46;color:#ecfdf5;border-color:#10b981;">Run</button>
-          </div>
-          <pre id="drawerOutput" style="margin:0;max-height:160px;overflow-y:auto;font-size:0.78rem;color:#34d399;white-space:pre-wrap;background:#04070d;padding:8px 10px;border-radius:8px;border:1px solid rgba(255,255,255,0.08);">Ready (Read-Only Guard Active).</pre>
-        </div>
-        <div id="demoBanner" class="demo-banner" style="display:none;">
-          <span>🧪</span>
-          <span><strong>Demo Brain active</strong> — no GGUF weights installed, so replies are simulated locally. The rest of the app is fully live.</span>
-          <button type="button" onclick="openModelHelp()">Get real models</button>
-        </div>
         <form class="composer" id="composer" onsubmit="sendMessage(event)">
           <div class="composer-row">
             <textarea id="promptInput" rows="1" placeholder="Message ARGON-OMEGA — ask for code, an explanation, or say “remember that …”" autocomplete="off"></textarea>
@@ -1700,10 +2041,19 @@ HTML_UI = r"""<!DOCTYPE html>
           </div>
           <div class="composer-tools">
             <button type="button" id="imageModeBtn" class="tool-btn" onclick="toggleImageMode()" title="Toggle image generation mode">🎨 Image</button>
-            <button type="button" id="terminalToggleBtn" class="tool-btn" onclick="toggleTerminalDrawer()" title="Toggle read-only terminal &amp; sandbox">💻 Terminal</button>
-            <button type="button" class="tool-btn" onclick="newChat()" title="Start a new chat (Ctrl+Shift+O)">✧ New chat</button>
+            <button type="button" class="tool-btn" onclick="switchTab('sandbox')" title="Open the sandbox &amp; terminal">🧪 <span class="t-label">Sandbox</span></button>
+            <button type="button" class="tool-btn" onclick="newChat()" title="Start a new chat (Ctrl+Shift+O)">✦ <span class="t-label">New</span></button>
             <button type="button" id="quantumToggleBtn" class="tool-btn active" onclick="toggleQuantumMode()" title="Quantum reasoning enabled">⚛️ Quantum ON</button>
             <span class="spacer"></span>
+            <select id="brainSelect" class="model-select" onchange="selectBrain()" title="Model / brain used for replies">
+              <option value="auto">⚡ Auto brain</option>
+              <option value="qwen2.5-coder-7b-instruct-q4_k_m.gguf">💻 Qwen Coder 7B</option>
+              <option value="qwen2.5-coder-32b-instruct-IQ3_XS.gguf">🏗️ Qwen Coder 32B</option>
+              <option value="Phi-4-mini-instruct-Q4_K_M.gguf">🧮 Phi-4 mini</option>
+              <option value="phi-4-Q4_K_M.gguf">🧠 Phi-4 14B</option>
+              <option value="gemma-3-4b-it-Q4_K_M.gguf">🌐 Gemma 3 4B</option>
+              <option value="gemma-3-1b-it-Q4_K_M.gguf">⚡ Gemma 3 1B</option>
+            </select>
             <select id="thinkingLevelSelect" title="Thinking level: Low = fast, Mid = balanced, High = deep">
               <option value="low">⚡ Low</option>
               <option value="mid" selected>⚖️ Mid</option>
@@ -1784,30 +2134,56 @@ HTML_UI = r"""<!DOCTYPE html>
 
     <!-- SANDBOX & TERMINAL STUDIO TAB -->
     <div id="tab-sandbox" class="tab-view">
-      <div class="lab-container" style="max-width:1200px; height:100%; display:flex; flex-direction:column; gap:12px;">
-        <div style="display:flex; gap:8px; flex-wrap:wrap; align-items:center;">
-          <button class="btn-subtle" onclick="loadSandboxTemplate('snake')" style="width:auto;padding:6px 12px;">🐍 Playable Snake Game</button>
-          <button class="btn-subtle" onclick="loadSandboxTemplate('python')" style="width:auto;padding:6px 12px;">⚡ Python Algorithm Runner</button>
-          <button class="btn-subtle" onclick="loadSandboxTemplate('terminal')" style="width:auto;padding:6px 12px;">💻 Full System Terminal (CMD/PowerShell)</button>
-          <button class="btn-firehose" onclick="runSandbox()" style="width:auto;padding:6px 16px;margin-left:auto;">▶ Run Code / HTML5</button>
-          <button class="btn-subtle" onclick="document.getElementById('sandboxEditor').value=''; document.getElementById('sandboxConsole').textContent=''; document.getElementById('sandboxFrame').srcdoc='';" style="width:auto;padding:6px 12px;">Clear</button>
-        </div>
-        <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; flex:1; min-height:420px;">
-          <div class="lab-panel" style="display:flex; flex-direction:column; gap:8px;">
-            <div class="card-label">Code / Terminal Editor (Python, HTML5/JS, or !Command)</div>
-            <textarea id="sandboxEditor" style="flex:1; width:100%; min-height:360px; font-family:monospace; font-size:0.85rem; background:#0b1120; color:#e2e8f0; border:1px solid rgba(255,255,255,0.12); border-radius:8px; padding:10px; resize:none;" placeholder="Write Python code, HTML5/JS app, or !command..."></textarea>
+      <div class="sandbox-shell">
+        <div class="sandbox-head">
+          <div class="sandbox-modes" role="tablist" aria-label="Sandbox mode">
+            <button class="sandbox-mode active" id="sandboxModeCode" onclick="sandboxSetMode('code')" role="tab" aria-selected="true">🧪 Code</button>
+            <button class="sandbox-mode" id="sandboxModeTerm" onclick="sandboxSetMode('terminal')" role="tab" aria-selected="false">💻 Terminal</button>
           </div>
-          <div class="lab-panel" style="display:flex; flex-direction:column; gap:8px;">
-            <div class="card-label">Interactive System Terminal &amp; Console Output</div>
-            <pre id="sandboxConsole" class="output-pre" style="min-height:160px; max-height:220px; overflow:auto; margin:0; font-family:monospace; font-size:0.82rem;">Full System Terminal ready. Type any CMD/PowerShell command below.</pre>
-            <div style="display:flex; align-items:center; gap:6px; background:#020617; border:1px solid rgba(56,189,248,0.35); border-radius:8px; padding:6px 10px;">
-              <span id="terminalPromptLabel" style="font-family:monospace; font-size:0.82rem; color:#38bdf8; white-space:nowrap;">PS ~&gt;</span>
-              <input id="terminalCmdInput" type="text" autocomplete="off" placeholder="Enter CMD/PowerShell command (e.g. dir, cd .., ipconfig, cls)..." style="flex:1; background:transparent; border:none; outline:none; color:#e2e8f0; font-family:monospace; font-size:0.85rem;" onkeydown="handleTerminalKey(event)">
+          <div class="sandbox-actions">
+            <button class="tpl-chip" onclick="loadSandboxTemplate('python')" title="Load a Python starter">⚡ Python</button>
+            <button class="tpl-chip" onclick="loadSandboxTemplate('snake')" title="Load a playable game">🐍 Snake</button>
+            <button class="tpl-chip" onclick="loadSandboxTemplate('terminal')" title="Switch to system terminal">💻 Shell</button>
+            <button class="tpl-chip" onclick="clearSandbox()" title="Clear editor &amp; output">🧹 Clear</button>
+            <button class="btn-firehose" id="sandboxRunBtn" onclick="runSandbox()" title="Run (Ctrl+Enter)">▶ Run <span class="kbd-hint" style="font-size:.66rem;opacity:.7;">⌘↵</span></button>
+          </div>
+        </div>
+
+        <div class="sandbox-body">
+          <section class="sandbox-pane">
+            <div class="pane-head">
+              <span class="file" id="sandboxFileName">main.py</span>
+              <span class="pane-meta" id="sandboxEditorMeta">python · utf-8</span>
             </div>
-            <div class="card-label">Live HTML5 App / Game Canvas</div>
-            <iframe id="sandboxFrame" sandbox="allow-scripts" style="flex:1; width:100%; min-height:180px; background:#0f172a; border:1px solid rgba(255,255,255,0.12); border-radius:8px;"></iframe>
-          </div>
+            <div class="editor-wrap">
+              <pre id="sandboxLineNums">1</pre>
+              <textarea id="sandboxEditor" spellcheck="false" autocomplete="off" autocapitalize="off"
+                oninput="sandboxUpdateLineNums()" onscroll="document.getElementById('sandboxLineNums').scrollTop=this.scrollTop;"
+                placeholder="# Python, HTML5/JS or a shell command — then Run (Ctrl+Enter)"></textarea>
+            </div>
+          </section>
+
+          <section class="sandbox-pane">
+            <div class="pane-head">
+              <span class="file">Output</span>
+              <span class="run-status idle" id="sandboxStatus">idle</span>
+              <div class="out-tabs">
+                <button class="out-tab active" id="outTabConsole" onclick="sandboxSetOutput('console')">Console</button>
+                <button class="out-tab" id="outTabPreview" onclick="sandboxSetOutput('preview')">Preview</button>
+              </div>
+            </div>
+            <pre id="sandboxConsole">Ready. Write code above and press Run — Python runs sandboxed, HTML renders live in Preview.</pre>
+            <iframe id="sandboxFrame" sandbox="allow-scripts" title="Live preview"></iframe>
+            <div class="term-row">
+              <span class="prompt" id="terminalPromptLabel">$</span>
+              <input id="terminalCmdInput" type="text" autocomplete="off" spellcheck="false"
+                placeholder="Run a read-only shell command…"
+                onkeydown="handleTerminalKey(event)" />
+            </div>
+          </section>
         </div>
+
+        <div class="sandbox-templates" id="sandboxQuickCmds"></div>
       </div>
     </div>
 
@@ -1973,6 +2349,29 @@ HTML_UI = r"""<!DOCTYPE html>
 
   <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebarOnMobile()"></div>
 
+  <div id="shareModal" class="models-modal" onclick="if(event.target===this)closeShare()">
+    <div class="models-panel" role="dialog" aria-modal="true" aria-label="Share chat">
+      <header class="models-head">
+        <div>
+          <h2>🔗 Share chat</h2>
+          <p id="shareSub">Nothing is uploaded. Copy the transcript, download Markdown, or copy a link that reopens this chat on this machine.</p>
+        </div>
+        <button class="icon-btn" onclick="closeShare()" title="Close">✕</button>
+      </header>
+      <div class="share-body">
+        <textarea id="shareText" readonly spellcheck="false"></textarea>
+      </div>
+      <footer class="models-foot">
+        <span id="shareFootNote">Local-only export · 100% offline</span>
+        <div class="foot-actions">
+          <button class="btn-subtle" onclick="copyShare()">📋 Copy</button>
+          <button class="btn-subtle" onclick="downloadShare()">⬇ Markdown</button>
+          <button class="btn-subtle" onclick="copyShareLink()">🔗 Copy link</button>
+        </div>
+      </footer>
+    </div>
+  </div>
+
   <div id="modelsModal" class="models-modal" onclick="if(event.target===this)closeModels()">
     <div class="models-panel" role="dialog" aria-modal="true" aria-label="Models">
       <header class="models-head">
@@ -2025,61 +2424,210 @@ HTML_UI = r"""<!DOCTYPE html>
       if (!sb) return;
       const collapsed = sb.classList.toggle('collapsed');
       if (openBtn) openBtn.style.display = collapsed ? 'flex' : 'none';
-      if (overlay) overlay.classList.toggle('show', !collapsed && window.innerWidth <= 820);
+      const overlayOn = !collapsed && window.innerWidth <= 820;
+      if (overlay) overlay.classList.toggle('show', overlayOn);
+      document.body.classList.toggle('sidebar-open', overlayOn);
     }
 
     function switchTab(name, btn) {
       document.querySelectorAll('.tab-view').forEach(el => el.classList.remove('active'));
-      document.querySelectorAll('.tab-btn').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tool-nav-btn').forEach(el => el.classList.remove('active'));
       const view = document.getElementById('tab-' + name);
       if (view) view.classList.add('active');
-      let target = btn;
-      if (!target) {
-        target = [...document.querySelectorAll('.tab-btn')].find(
-          b => (b.getAttribute('onclick') || '').includes(`switchTab('${name}'`)
-        );
+      const target = btn || document.querySelector(`.tool-nav-btn[data-tab="${name}"]`);
+      if (target && target.classList) target.classList.add('active');
+      if (name === 'chat') {
+        updateScrollFab();
+        const input = document.getElementById('promptInput');
+        if (input && window.innerWidth > 820) input.focus();
       }
-      if (target) target.classList.add('active');
-      if (name === 'chat') { updateScrollFab(); }
+      if (name === 'sandbox') setTimeout(sandboxUpdateLineNums, 0);
+      if (window.innerWidth <= 820) closeSidebarOnMobile();
+      try { localStorage.setItem('argon_last_tab', name); } catch (e) {}
+    }
+
+    function historyAction(label, title, handler, kind) {
+      const b = document.createElement('button');
+      b.type = 'button';
+      b.className = 'hist-act' + (kind ? ' ' + kind : '');
+      b.title = title;
+      b.setAttribute('aria-label', title);
+      b.textContent = label;
+      b.onclick = (e) => { e.stopPropagation(); handler(e); };
+      return b;
+    }
+
+    function buildHistoryItem(chat, archived) {
+      const item = document.createElement('div');
+      item.className = 'history-item' + (chat.id === currentChatId ? ' active' : '') + (archived ? ' archived' : '');
+      item.tabIndex = 0;
+      item.onclick = () => loadChat(chat.id);
+      item.onkeydown = (e) => { if (e.key === 'Enter') loadChat(chat.id); };
+
+      const title = document.createElement('span');
+      title.className = 'history-item-title';
+      title.textContent = (pendingChats.has(chat.id) ? '⏳ ' : '') + (chat.title || 'New chat');
+      title.title = chat.title || 'New chat';
+      item.appendChild(title);
+
+      const actions = document.createElement('span');
+      actions.className = 'history-actions';
+      if (archived) {
+        actions.appendChild(historyAction('↩', 'Restore chat', () => restoreChat(chat.id)));
+        actions.appendChild(historyAction('✕', 'Delete permanently', () => deleteChat(chat.id), 'danger'));
+      } else {
+        actions.appendChild(historyAction('🔗', 'Share / export', () => shareChat(chat.id)));
+        actions.appendChild(historyAction('📦', 'Archive chat', () => archiveChat(chat.id)));
+        actions.appendChild(historyAction('✕', 'Delete chat', () => deleteChat(chat.id), 'danger'));
+      }
+      item.appendChild(actions);
+      return item;
     }
 
     function renderHistory() {
       const list = document.getElementById('historyList');
+      if (!list) return;
       list.innerHTML = '';
-      chats.slice().reverse().forEach(c => {
-        const item = document.createElement('div');
-        item.className = 'history-item' + (c.id === currentChatId ? ' active' : '');
-        item.onclick = () => loadChat(c.id);
+      const active = chats.filter(c => !c.archived);
+      const archived = chats.filter(c => c.archived);
+      if (!active.length) {
+        const empty = document.createElement('div');
+        empty.className = 'history-empty';
+        empty.textContent = chats.length ? 'Everything is archived — open Archived below.' : 'No chats yet — say hello to start.';
+        list.appendChild(empty);
+      }
+      active.slice().reverse().forEach(c => list.appendChild(buildHistoryItem(c, false)));
 
-        const title = document.createElement('span');
-        title.className = 'history-item-title';
-        title.textContent = (pendingChats.has(c.id) ? '⏳ ' : '') + (c.title || 'New Chat');
+      const block = document.getElementById('archiveBlock');
+      const countEl = document.getElementById('archiveCount');
+      const archList = document.getElementById('archiveList');
+      if (block) block.style.display = archived.length ? '' : 'none';
+      if (countEl) countEl.textContent = String(archived.length);
+      if (archList) {
+        archList.innerHTML = '';
+        archived.slice().reverse().forEach(c => archList.appendChild(buildHistoryItem(c, true)));
+      }
+      const q = document.getElementById('chatSearchInput');
+      if (q && q.value) filterHistory(q.value);
+    }
 
-        const delBtn = document.createElement('button');
-        delBtn.className = 'history-del-btn';
-        delBtn.title = 'Delete chat';
-        delBtn.textContent = '✕';
-        delBtn.onclick = (e) => deleteChat(c.id, e);
+    function toggleArchiveList(force) {
+      const list = document.getElementById('archiveList');
+      const toggle = document.getElementById('archiveToggle');
+      const caret = document.getElementById('archiveCaret');
+      if (!list) return;
+      const open = typeof force === 'boolean' ? force : list.style.display === 'none';
+      list.style.display = open ? 'block' : 'none';
+      if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      if (caret) caret.textContent = open ? '▴' : '▾';
+    }
 
-        item.appendChild(title);
-        item.appendChild(delBtn);
-        list.appendChild(item);
+    function archiveChat(id) {
+      const chat = chats.find(c => c.id === id);
+      if (!chat) return;
+      chat.archived = true;
+      localStorage.setItem('argon_chats', JSON.stringify(chats));
+      if (currentChatId === id) newChat();
+      toggleArchiveList(true);
+      renderHistory();
+      toast('Chat archived', 'ok', 1800);
+    }
+
+    function restoreChat(id) {
+      const chat = chats.find(c => c.id === id);
+      if (!chat) return;
+      chat.archived = false;
+      localStorage.setItem('argon_chats', JSON.stringify(chats));
+      renderHistory();
+      toast('Chat restored to recent', 'ok', 1800);
+    }
+
+    let shareChatId = null;
+
+    function chatToMarkdown(chat) {
+      const when = new Date(Number(chat.id) || Date.now()).toLocaleString();
+      const lines = [`# ${chat.title || 'ARGON-OMEGA chat'}`, '', `_${when} · exported from ARGON-OMEGA (100% offline)_`, ''];
+      (chat.messages || []).forEach(m => {
+        lines.push(m.role === 'user' ? '**👤 You**' : '**✦ ARGON-OMEGA**');
+        lines.push('');
+        lines.push(m.text || '');
+        if (m.imageUrl) lines.push('', `![generated image](${m.imageUrl})`);
+        lines.push('');
       });
+      return lines.join('\n').trim() + '\n';
+    }
+
+    function shareChat(id) {
+      const chat = chats.find(c => c.id === id) || chats.find(c => c.id === currentChatId);
+      if (!chat) { toast('Start a chat first, then share it', 'info'); return; }
+      shareChatId = chat.id;
+      const modal = document.getElementById('shareModal');
+      const ta = document.getElementById('shareText');
+      if (!modal || !ta) return;
+      ta.value = chatToMarkdown(chat);
+      const sub = document.getElementById('shareSub');
+      if (sub) {
+        sub.textContent = `“${chat.title || 'Untitled chat'}” · ${(chat.messages || []).length} message(s) · nothing is uploaded.`;
+      }
+      modal.classList.add('open');
+      modal.style.display = 'flex';
+    }
+
+    function closeShare() {
+      const modal = document.getElementById('shareModal');
+      if (modal) { modal.classList.remove('open'); modal.style.display = 'none'; }
+    }
+
+    function copyShare() {
+      const ta = document.getElementById('shareText');
+      if (ta) copyToClipboard(ta.value, 'Transcript copied');
+    }
+
+    function downloadShare() {
+      const chat = chats.find(c => c.id === shareChatId);
+      if (!chat) return;
+      const slug = (chat.title || 'argon-chat').toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/^-|-$/g, '').slice(0, 48) || 'argon-chat';
+      const blob = new Blob([chatToMarkdown(chat)], { type: 'text/markdown;charset=utf-8' });
+      const a = document.createElement('a');
+      a.href = URL.createObjectURL(blob);
+      a.download = slug + '.md';
+      document.body.appendChild(a);
+      a.click();
+      setTimeout(() => { URL.revokeObjectURL(a.href); a.remove(); }, 1000);
+      toast('Markdown exported', 'ok');
+    }
+
+    function copyShareLink() {
+      if (!shareChatId) return;
+      const url = location.origin + location.pathname + '#chat-' + encodeURIComponent(shareChatId);
+      copyToClipboard(url, 'Local link copied — opens this chat offline');
+    }
+
+    function openChatFromHash() {
+      const m = String(location.hash || '').match(/^#chat-(.+)$/);
+      if (!m) return false;
+      let id = m[1];
+      try { id = decodeURIComponent(id); } catch (e) {}
+      const chat = chats.find(c => c.id === id);
+      if (!chat) { toast('That shared chat is not on this machine anymore', 'info'); return false; }
+      if (chat.archived) chat.archived = false;
+      loadChat(id);
+      return true;
     }
 
     function deleteChat(id, e) {
-      e.stopPropagation();
+      if (e && e.stopPropagation) e.stopPropagation();
+      const chat = chats.find(c => c.id === id);
+      if (!chat) return;
+      if (!chat.archived && chat.messages && chat.messages.length > 1 &&
+          !confirm(`Delete "${chat.title || 'this chat'}" permanently?`)) return;
       chats = chats.filter(c => c.id !== id);
       localStorage.setItem('argon_chats', JSON.stringify(chats));
+      if (shareChatId === id) { shareChatId = null; closeShare(); }
       if (currentChatId === id) {
         newChat();
       } else {
-
-
-
-
-
-    renderHistory();
+        renderHistory();
       }
     }
 
@@ -2614,16 +3162,23 @@ HTML_UI = r"""<!DOCTYPE html>
         }
         const totalRowsEl = document.getElementById('totalRows');
         if (totalRowsEl) {
-          totalRowsEl.innerHTML = `Brains: ${s.total_rows.toLocaleString()} • Memories: <span id="memoryRows">${s.memory_rows}</span>`;
+          const memRows = Number(s.memory_rows || 0);
+          const brainRows = Number(s.total_rows || 0);
+          totalRowsEl.innerHTML = memRows
+            ? `<span id="memoryRows">${memRows.toLocaleString()}</span> mem · ${brainRows.toLocaleString()} idx`
+            : `${brainRows.toLocaleString()} rows indexed`;
+          totalRowsEl.title = `Memory rows: ${s.memory_rows} · Indexed brain rows: ${s.total_rows} · ROM limit ${s.max_rom_gb} GB`;
         }
 
         if (typeof data.offline_mode === 'boolean') {
           window._offlineMode = data.offline_mode;
           const oBtn = document.getElementById('offlineModeBtn');
           if (oBtn) {
-            oBtn.textContent = data.offline_mode ? '✈️ OFFLINE ONLY' : '🌐 ONLINE';
-            oBtn.style.borderColor = data.offline_mode ? '#10b981' : '#38bdf8';
-            oBtn.style.color = data.offline_mode ? '#10b981' : '#38bdf8';
+            oBtn.innerHTML = data.offline_mode ? '✈️ <span class="t-label">Offline</span>' : '🌐 <span class="t-label">Online</span>';
+            oBtn.title = data.offline_mode
+              ? 'Offline mode is ON — no network calls are made'
+              : 'Offline mode is OFF — click to block all network access';
+            oBtn.classList.toggle('on', !!data.offline_mode);
           }
         }
         if (data.flux_status) {
@@ -2661,18 +3216,6 @@ HTML_UI = r"""<!DOCTYPE html>
               });
             }
             bSel.value = data.brains.selected_mode || prevVal || 'auto';
-          }
-          const lSel = document.getElementById('langSelect');
-          if (lSel && data.brains.languages && lSel.options.length <= 8) {
-            const prevLang = data.brains.selected_language || lSel.value || 'auto';
-            lSel.innerHTML = '';
-            data.brains.languages.forEach(l => {
-              const opt = document.createElement('option');
-              opt.value = l.code;
-              opt.textContent = l.code === 'auto' ? '🌐 Auto-Detect Language' : l.label;
-              lSel.appendChild(opt);
-            });
-            lSel.value = prevLang;
           }
           if (typeof data.brains.quantum_mode === 'boolean') {
             quantumModeEnabled = data.brains.quantum_mode;
@@ -2757,15 +3300,6 @@ HTML_UI = r"""<!DOCTYPE html>
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify({ mode })
-      });
-    }
-
-    async function selectLanguage() {
-      const language = document.getElementById('langSelect').value;
-      await fetch('/api/language/select', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ language })
       });
     }
 
@@ -2991,7 +3525,7 @@ HTML_UI = r"""<!DOCTYPE html>
       appendTypingIndicator();
       setComposerBusy(true);
 
-      const lang = document.getElementById('langSelect') ? document.getElementById('langSelect').value : 'auto';
+      const lang = 'auto';  /* language UI removed — the engine auto-detects */
 
       try {
         /* ---------------- image generation mode ---------------- */
@@ -3189,10 +3723,19 @@ print("Sorted:", quicksort(data))
 primes = [n for n in range(2, 50) if all(n % d != 0 for d in range(2, int(n**0.5) + 1))]
 print("Primes < 50:", primes)`;
       } else if (kind === 'terminal') {
-        ed.value = `!python --version; Get-Location; dir`;
-        const termIn = document.getElementById('terminalCmdInput');
-        if (termIn) termIn.focus();
+        sandboxSetMode('terminal');
+        ed.value = '!whoami';
+      } else {
+        sandboxSetMode('code');
       }
+      if (kind === 'snake') {
+        sandboxSetMode('code');
+        const file = document.getElementById('sandboxFileName');
+        if (file) file.textContent = 'snake.html';
+        sandboxSetOutput('preview');
+      }
+      sandboxUpdateLineNums();
+      sandboxStatus('idle', 'idle');
     }
 
     const terminalHistory = [];
@@ -3258,24 +3801,68 @@ print("Primes < 50:", primes)`;
       out.scrollTop = out.scrollHeight;
     }
 
-    async function runSandbox() {
-      const code = document.getElementById('sandboxEditor').value.trim();
-      const out = document.getElementById('sandboxConsole');
-      const frame = document.getElementById('sandboxFrame');
-      if (!code) return;
-      if (code.startsWith('<!DOCTYPE') || code.startsWith('<html') || code.includes('<canvas') || code.includes('<script>')) {
-        frame.srcdoc = code;
-        out.textContent = 'Rendered HTML5 App / Game in Live Canvas.';
-        return;
-      }
-      out.textContent = 'Running in sandbox...';
+    async function sandboxExec(code, mode) {
       const res = await fetch('/api/sandbox/run', {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ code })
+        body: JSON.stringify({ code, mode })
       });
-      const data = await res.json();
-      out.textContent = (data.stdout || '') + (data.stderr ? '\n[STDERR]\n' + data.stderr : '');
+      return await readJsonSafe(res);
+    }
+
+    async function runSandbox() {
+      const ed = document.getElementById('sandboxEditor');
+      const out = document.getElementById('sandboxConsole');
+      const frame = document.getElementById('sandboxFrame');
+      if (!ed || !out) return;
+      const code = ed.value.trim();
+      if (!code) { toast('Editor is empty — load a template or write some code', 'info'); return; }
+      const btn = document.getElementById('sandboxRunBtn');
+      if (btn) btn.disabled = true;
+      const looksHtml = /^\s*<!doctype/i.test(code) || /^\s*<html/i.test(code) || (code.includes('<script') && code.includes('<\/script>'));
+      const t0 = performance.now();
+      try {
+        if (looksHtml && sandboxMode !== 'terminal') {
+          if (frame) frame.srcdoc = code;
+          sandboxSetOutput('preview');
+          out.textContent = '▶ HTML rendered in the Preview tab. Edit the code and Run again to refresh.';
+          sandboxStatus('rendered · preview', 'ok');
+          return;
+        }
+        sandboxSetOutput('console');
+        sandboxStatus('running…', 'running');
+        out.textContent = '▶ Running…';
+        if (sandboxMode === 'terminal') {
+          const lines = code.split('\n').map(l => l.trim()).filter(Boolean);
+          const chunks = [];
+          let bad = false;
+          for (const line of lines) {
+            const data = await sandboxExec(line.startsWith('!') ? line : '!' + line, 'terminal');
+            if (data.cwd && document.getElementById('terminalPromptLabel')) {
+              document.getElementById('terminalPromptLabel').textContent = `PS ${data.cwd}>`;
+            }
+            const chunk = [data.stdout, data.stderr].filter(Boolean).join('\n');
+            if (chunk) chunks.push(`$ ${line.replace(/^!/, '')}\n${chunk}`);
+            if (data.returncode && data.returncode !== 0) bad = true;
+          }
+          const ms = Math.round(performance.now() - t0);
+          out.textContent = chunks.join('\n\n') || '(no output)';
+          sandboxStatus(`${bad ? 'exit≠0' : 'exit 0'} · ${ms}ms`, bad ? 'err' : 'ok');
+          return;
+        }
+        const data = await sandboxExec(code, 'auto');
+        const ms = Math.round(performance.now() - t0);
+        const body = [data.stdout, data.stderr ? '[stderr]\n' + data.stderr : ''].filter(Boolean).join('\n');
+        out.textContent = body || '(no output)';
+        const bad = Boolean(data.stderr) || (typeof data.returncode === 'number' && data.returncode !== 0) || data.ok === false;
+        sandboxStatus(`${bad ? 'error' : 'exit 0'} · ${ms}ms`, bad ? 'err' : 'ok');
+      } catch (err) {
+        out.textContent = 'Request failed: ' + err.message;
+        sandboxStatus('failed', 'err');
+        toast('Sandbox request failed', 'err');
+      } finally {
+        if (btn) btn.disabled = false;
+      }
     }
 
     async function loadBenchmarkModels() {
@@ -3600,44 +4187,97 @@ print("Primes < 50:", primes)`;
       }
     }
 
-    function toggleTerminalDrawer() {
-      const d = document.getElementById('terminalDrawer');
-      const btn = document.getElementById('terminalToggleBtn');
-      const open = d.style.display === 'none';
-      d.style.display = open ? 'block' : 'none';
-      btn.classList.toggle('active', open);
-      if (open) document.getElementById('drawerInput').focus();
+    /* ---------------- sandbox studio ---------------- */
+    let sandboxMode = 'code';
+    let sandboxOutputMode = 'console';
+
+    function sandboxStatus(text, kind) {
+      const el = document.getElementById('sandboxStatus');
+      if (!el) return;
+      el.textContent = text;
+      el.className = 'run-status ' + (kind || 'idle');
     }
 
-    async function runDrawerCmd(presetMode = null, presetCode = null) {
-      const mode = presetMode || document.getElementById('drawerMode').value;
-      const inputEl = document.getElementById('drawerInput');
-      const code = presetCode !== null ? presetCode : inputEl.value.trim();
-      const outEl = document.getElementById('drawerOutput');
-      if (!code) return;
-      if (presetCode !== null) {
-        document.getElementById('drawerMode').value = mode;
-        inputEl.value = code;
-      }
-      outEl.style.color = '#94a3b8';
-      outEl.textContent = '⏳ Executing...';
-      try {
-        const res = await fetch('/api/sandbox_run', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ mode, code })
-        });
-        const data = await res.json();
-        outEl.style.color = data.ok ? '#34d399' : '#f87171';
-        const body = [data.stdout, data.stderr].filter(Boolean).join('\n') || '(No output)';
-        outEl.textContent = `[${data.ok ? 'EXIT 0' : 'BLOCKED/ERR'} | ${data.elapsed_ms}ms]\n${body}`;
-      } catch (e) {
-        outEl.style.color = '#f87171';
-        outEl.textContent = 'Error: ' + e;
-      }
+    function sandboxUpdateLineNums() {
+      const ed = document.getElementById('sandboxEditor');
+      const nums = document.getElementById('sandboxLineNums');
+      if (!ed || !nums) return;
+      const n = Math.max(1, ed.value.split('\n').length);
+      let out = '';
+      for (let i = 1; i <= n; i++) out += i + '\n';
+      nums.textContent = out.trimEnd();
+      nums.scrollTop = ed.scrollTop;
     }
 
+    function sandboxSetOutput(which) {
+      sandboxOutputMode = which;
+      const consoleEl = document.getElementById('sandboxConsole');
+      const frame = document.getElementById('sandboxFrame');
+      const tabC = document.getElementById('outTabConsole');
+      const tabP = document.getElementById('outTabPreview');
+      if (tabC) tabC.classList.toggle('active', which === 'console');
+      if (tabP) tabP.classList.toggle('active', which === 'preview');
+      if (consoleEl) consoleEl.style.display = which === 'console' ? 'block' : 'none';
+      if (frame) frame.style.display = which === 'preview' ? 'block' : 'none';
+    }
 
+    function sandboxSetMode(mode) {
+      sandboxMode = mode === 'terminal' ? 'terminal' : 'code';
+      document.getElementById('sandboxModeCode')?.classList.toggle('active', sandboxMode === 'code');
+      document.getElementById('sandboxModeTerm')?.classList.toggle('active', sandboxMode === 'terminal');
+      document.getElementById('sandboxModeCode')?.setAttribute('aria-selected', sandboxMode === 'code' ? 'true' : 'false');
+      document.getElementById('sandboxModeTerm')?.setAttribute('aria-selected', sandboxMode === 'terminal' ? 'true' : 'false');
+      const ed = document.getElementById('sandboxEditor');
+      const file = document.getElementById('sandboxFileName');
+      const meta = document.getElementById('sandboxEditorMeta');
+      if (!ed) return;
+      if (sandboxMode === 'terminal') {
+        if (!ed.value.trim().startsWith('!')) ed.value = '!whoami';
+        if (file) file.textContent = 'shell';
+        if (meta) meta.textContent = 'read-only commands';
+        ed.placeholder = '!command — one read-only command per line (ls, pwd, python --version)';
+        toast('Shell mode — each line runs read-only in the sandbox', 'info', 2400);
+      } else {
+        ed.value = ed.value.replace(/^!/gm, '');
+        if (file) file.textContent = 'main.py';
+        if (meta) meta.textContent = 'python · utf-8';
+        ed.placeholder = '# Python or HTML5/JS — then Run (Ctrl+Enter)';
+      }
+      sandboxUpdateLineNums();
+      ed.focus();
+    }
+
+    function clearSandbox() {
+      const ed = document.getElementById('sandboxEditor');
+      const out = document.getElementById('sandboxConsole');
+      const frame = document.getElementById('sandboxFrame');
+      if (ed) ed.value = '';
+      if (out) out.textContent = 'Cleared. Write code above and press Run.';
+      if (frame) frame.srcdoc = '';
+      sandboxSetOutput('console');
+      sandboxStatus('idle', 'idle');
+      sandboxUpdateLineNums();
+    }
+
+    function sandboxFillCommand(cmd, autoRun) {
+      const input = document.getElementById('terminalCmdInput');
+      if (input) { input.value = cmd; input.focus(); }
+      sandboxSetOutput('console');
+      if (autoRun) runTerminalCommand(cmd);
+    }
+
+    function renderSandboxQuickCmds(platform) {
+      const host = document.getElementById('sandboxQuickCmds');
+      if (!host) return;
+      const win = String(platform || navigator.platform || '').toLowerCase().includes('win');
+      const cmds = win
+        ? [['$ whoami', 'whoami'], ['$ dir', 'dir'], ['$ ipconfig', 'ipconfig'], ['$ tasklist', 'tasklist']]
+        : [['$ whoami', 'whoami'], ['$ ls -la', 'ls -la'], ['$ ip addr', 'ip addr'], ['$ ps aux', 'ps aux']];
+      host.innerHTML = '<span class="tpl-hint">Quick shell</span>' + cmds
+        .map(([label, cmd]) => `<button type="button" class="tpl-chip" onclick="sandboxFillCommand('${cmd.replace(/'/g, "\\'")}', true)">${label}</button>`)
+        .join('') +
+        `<button type="button" class="tpl-chip" onclick="sandboxFillCommand('!python3 -c \\'print(2**10)\\'' , true)">🐍 Python</button>`;
+    }
 
     function ideRenderTabs() {
       const bar = document.getElementById('ideTabs');
@@ -3933,12 +4573,23 @@ print("Primes < 50:", primes)`;
     }
 
     function animateImageToVideo(filename, promptText) {
-      const btn = Array.from(document.querySelectorAll('.tab-btn')).find(b => b.textContent.includes('Video'));
-      if (btn) switchTab('video', btn);
+      switchTab('video');
       runVideoGen(filename, promptText || 'cinematic motion');
     }
 
     renderHistory();
+    sandboxUpdateLineNums();
+    sandboxSetOutput('console');
+    if (window.innerWidth <= 820) {
+      document.getElementById('sidebar')?.classList.add('collapsed');
+      const openBtn = document.getElementById('openSidebarBtn');
+      if (openBtn) openBtn.style.display = 'flex';
+    }
+    try {
+      const lastTab = localStorage.getItem('argon_last_tab');
+      if (lastTab && lastTab !== 'chat' && document.getElementById('tab-' + lastTab)) switchTab(lastTab);
+    } catch (e) {}
+    openChatFromHash();
     setInterval(fetchTelemetry, 2000);
     initUiExtras();
   async function downloadFluxRom() {
@@ -4014,13 +4665,23 @@ print("Primes < 50:", primes)`;
       const q = String(query || '').trim().toLowerCase();
       const list = document.getElementById('historyList');
       if (!list) return;
-      list.querySelectorAll('.history-item').forEach(item => {
+      const match = (item) => {
         const title = (item.querySelector('.history-item-title')?.textContent || '').toLowerCase();
-        item.style.display = !q || title.includes(q) ? '' : 'none';
-      });
-      const anyVisible = [...list.querySelectorAll('.history-item')].some(el => el.style.display !== 'none');
+        const hit = !q || title.includes(q);
+        item.style.display = hit ? '' : 'none';
+        return hit;
+      };
+      const visible = [...list.querySelectorAll('.history-item')].filter(match).length;
+      const archList = document.getElementById('archiveList');
+      let archVisible = 0;
+      if (archList) archVisible = [...archList.querySelectorAll('.history-item')].filter(match).length;
+      const block = document.getElementById('archiveBlock');
+      if (block) {
+        const hasArch = document.getElementById('archiveCount')?.textContent !== '0';
+        block.style.display = hasArch ? '' : 'none';
+      }
       let empty = list.querySelector('.history-empty');
-      if (!anyVisible && q) {
+      if (!visible && q) {
         if (!empty) {
           empty = document.createElement('div');
           empty.className = 'history-empty';
@@ -4030,6 +4691,7 @@ print("Primes < 50:", primes)`;
       } else if (empty) {
         empty.remove();
       }
+      if (q && archVisible && archList) toggleArchiveList(true);
     }
     function updateComposerMeta() {
       const count = document.getElementById('charCount');
@@ -4190,20 +4852,11 @@ print("Primes < 50:", primes)`;
           ? 'Demo Brain · simulated locally · 100% offline'
           : '100% offline · local SSD ROM';
       }
-      renderTerminalQuickCmds(data.platform || '');
+      const dot = document.getElementById('engineDot');
+      if (dot) dot.classList.toggle('demo', demoActive);
+      renderSandboxQuickCmds(data.platform || '');
     }
-    function renderTerminalQuickCmds(platform) {
-      const host = document.getElementById('drawerQuickCmds');
-      if (!host) return;
-      const win = String(platform || navigator.platform || '').toLowerCase().includes('win');
-      const cmds = win
-        ? [['$ ipconfig', 'ipconfig'], ['$ netstat', 'netstat -ano'], ['$ tasklist', 'tasklist'], ['$ whoami', 'whoami']]
-        : [['$ ip a', 'ip addr'], ['$ ss -tulpn', 'ss -tulpn'], ['$ ps aux', 'ps aux'], ['$ whoami', 'whoami']];
-      host.innerHTML = cmds
-        .map(([label, cmd]) => `<button type="button" class="tool-btn" onclick="runDrawerCmd('terminal','${cmd.replace(/'/g, "\\'")}')">${label}</button>`)
-        .join('') +
-        `<button type="button" class="tool-btn" onclick="runDrawerCmd('python','print([x**2 for x in range(1, 11)])')">🧪 Test Python</button>`;
-    }
+
     function initUiExtras() {
       /* auto-grow + counter */
       const ta = document.getElementById('promptInput');
@@ -4226,6 +4879,23 @@ print("Primes < 50:", primes)`;
           }
         });
       }
+      /* sandbox shortcuts */
+      const sbEditor = document.getElementById('sandboxEditor');
+      if (sbEditor) {
+        sbEditor.addEventListener('keydown', (e) => {
+          if ((e.ctrlKey || e.metaKey) && e.key === 'Enter') {
+            e.preventDefault();
+            runSandbox();
+          } else if (e.key === 'Tab') {
+            e.preventDefault();
+            const start = sbEditor.selectionStart, end = sbEditor.selectionEnd;
+            sbEditor.value = sbEditor.value.slice(0, start) + '    ' + sbEditor.value.slice(end);
+            sbEditor.selectionStart = sbEditor.selectionEnd = start + 4;
+            sandboxUpdateLineNums();
+          }
+        });
+      }
+      /* footer share button on the last answer */
       /* scroll-to-bottom fab */
       const sc = document.getElementById('chatScroll');
       if (sc) sc.addEventListener('scroll', updateScrollFab, { passive: true });
