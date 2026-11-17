@@ -1921,6 +1921,135 @@ HTML_UI = r"""<!DOCTYPE html>
       .sidebar .system-strip { padding: 7px 9px; gap: 4px; }
     }
 
+    /* ---------- top tool strip (ChatGPT-style) ---------- */
+    .tool-strip {
+      display: flex; align-items: center; gap: 3px;
+      min-width: 0; flex: 0 1 auto; overflow-x: auto; overflow-y: hidden;
+      padding: 2px; border-radius: 11px;
+      background: rgba(148,163,184,.06); border: 1px solid var(--border-subtle);
+      scrollbar-width: none;
+    }
+    .tool-strip::-webkit-scrollbar { display: none; }
+    .tool-strip .strip-sep {
+      width: 1px; height: 18px; flex: none; margin: 0 3px;
+      background: var(--border-subtle);
+    }
+    .tool-strip-btn {
+      display: inline-flex; align-items: center; gap: 5px; flex: none;
+      padding: 5px 9px; min-height: 28px; border-radius: 8px;
+      border: 1px solid transparent; background: transparent; cursor: pointer;
+      color: #b8c6d6; font-family: inherit; font-size: .72rem; font-weight: 700;
+      transition: background .15s ease, color .15s ease, border-color .15s ease;
+    }
+    .tool-strip-btn:hover { background: rgba(148,163,184,.14); color: #fff; }
+    .tool-strip-btn.active {
+      background: rgba(16,185,129,.16); border-color: rgba(16,185,129,.4); color: #d3fff0;
+    }
+    .tool-strip-btn.new { color: #8af5cd; }
+    .tool-strip-btn.new:hover { background: rgba(16,185,129,.18); }
+
+    /* ---------- agent pane (IDE) ---------- */
+    .agent-pane {
+      flex: 1; display: flex; flex-direction: column; gap: 7px;
+      padding: 8px; overflow: hidden; background: #101418;
+    }
+    .agent-modes {
+      display: flex; gap: 2px; padding: 3px; flex: none;
+      background: #161c22; border: 1px solid #2d2d2d; border-radius: 9px;
+    }
+    .agent-mode {
+      flex: 1; padding: 5px 6px; border: none; border-radius: 7px; cursor: pointer;
+      background: transparent; color: #9aa8b8; font-family: inherit;
+      font-size: .69rem; font-weight: 700; white-space: nowrap;
+      transition: background .15s ease, color .15s ease;
+    }
+    .agent-mode:hover { color: #fff; }
+    .agent-mode.active {
+      background: linear-gradient(135deg, rgba(16,185,129,.9), rgba(13,148,136,.86));
+      color: #04120c;
+    }
+    .agent-chips { display: flex; flex-wrap: wrap; gap: 4px; flex: none; }
+    .agent-chip {
+      padding: 3px 7px; border-radius: 7px; cursor: pointer; min-height: 24px;
+      border: 1px solid #333c46; background: #171e25; color: #c5d3e2;
+      font-family: inherit; font-size: .67rem; font-weight: 600;
+    }
+    .agent-chip:hover { border-color: #4a5a69; color: #fff; }
+    .agent-transcript {
+      flex: 1; min-height: 0; overflow-y: auto;
+      background: #0b0f13; border: 1px solid #2d2d2d; border-radius: 9px;
+      padding: 8px; font-size: .76rem; color: #dbe6f0;
+    }
+    .agent-empty { color: #7d8b9b; line-height: 1.55; font-size: .73rem; }
+    .agent-plan {
+      font-size: .68rem; color: #8fa2b5; padding: 4px 0 6px;
+      border-bottom: 1px dashed #263038; margin-bottom: 6px;
+    }
+    .agent-step { margin-bottom: 9px; }
+    .agent-step-head { display: flex; align-items: center; gap: 6px; flex-wrap: wrap; }
+    .agent-step-title { font-weight: 700; color: #e7f0f8; }
+    .agent-step-icon { opacity: .9; }
+    .agent-status {
+      margin-left: auto; font-size: .6rem; font-weight: 800; letter-spacing: .06em;
+      text-transform: uppercase; padding: 1px 6px; border-radius: 99px;
+      background: rgba(148,163,184,.16); color: #9fb0c2;
+    }
+    .agent-status.applied { background: rgba(16,185,129,.18); color: #6ee7b7; }
+    .agent-status.staged { background: rgba(251,191,36,.18); color: #fcd34d; }
+    .agent-step-path {
+      font-family: var(--font-mono); font-size: .64rem; color: #6f8298;
+      margin: 2px 0 4px; word-break: break-all;
+    }
+    .agent-step-body { line-height: 1.55; color: #cbd7e3; }
+    .agent-step-body h3 { font-size: .82rem; margin: 2px 0 6px; color: #eaf4ff; }
+    .agent-step-body ul { margin: 4px 0 4px 16px; }
+    .agent-step-body li { margin: 2px 0; }
+    .agent-step-body code { background: rgba(148,163,184,.14); padding: 1px 4px; border-radius: 4px; font-size: .92em; }
+    .agent-step-body pre { background: #0f151b; border: 1px solid #263038; border-radius: 7px; padding: 6px 8px; overflow-x: auto; }
+    .agent-step.error .agent-step-title { color: #fca5a5; }
+    .agent-diff {
+      margin: 5px 0 0; padding: 7px 9px; max-height: 190px; overflow: auto;
+      background: #0d1216; border: 1px solid #263038; border-radius: 7px;
+      font-family: var(--font-mono); font-size: .68rem; line-height: 1.45;
+      color: #c3d3e2; white-space: pre;
+    }
+    .agent-review {
+      flex: none; display: none; flex-direction: column; gap: 6px;
+      border: 1px solid rgba(251,191,36,.4); border-radius: 9px;
+      background: rgba(251,191,36,.07); padding: 7px 8px;
+    }
+    .agent-review-head { font-size: .68rem; font-weight: 800; letter-spacing: .08em; text-transform: uppercase; color: #fcd34d; }
+    .agent-review-head span { font-weight: 600; letter-spacing: 0; text-transform: none; color: #c9b483; }
+    .agent-review-actions { display: flex; gap: 6px; }
+    .agent-apply, .agent-discard {
+      flex: 1; padding: 6px 8px; border-radius: 7px; cursor: pointer;
+      font-family: inherit; font-size: .72rem; font-weight: 800; border: 1px solid transparent;
+    }
+    .agent-apply { background: #065f46; color: #ecfdf5; border-color: #10b981; }
+    .agent-discard { background: #1b2229; color: #cbd5e1; border-color: #374151; }
+    .agent-apply:hover { filter: brightness(1.12); }
+    .agent-discard:hover { border-color: #6b7280; }
+    .agent-compose { display: flex; gap: 6px; flex: none; align-items: stretch; }
+    .agent-compose textarea {
+      flex: 1; resize: none; min-height: 40px; max-height: 96px;
+      background: #0f151b; color: #e6f0fa; border: 1px solid #2d3945; border-radius: 8px;
+      padding: 7px 9px; font-family: inherit; font-size: .76rem; line-height: 1.45;
+    }
+    .agent-compose textarea:focus { outline: none; border-color: rgba(16,185,129,.6); }
+    .agent-send {
+      width: 42px; border-radius: 8px; cursor: pointer;
+      background: linear-gradient(135deg, #10b981, #0d9488); color: #04120c;
+      border: none; font-size: 1rem; font-weight: 900;
+    }
+    .agent-send:disabled { opacity: .5; cursor: progress; }
+
+    @media (max-width: 900px) {
+      .tool-strip-btn .label { display: none; }
+      .tool-strip { flex: 1 1 auto; }
+      .agent-mode { font-size: .64rem; padding: 5px 3px; }
+      .agent-pane { padding: 6px; }
+    }
+
     /* ---------- mobile ---------- */
     @media (max-width: 900px) {
       .sandbox-body { grid-template-columns: 1fr; }
@@ -1987,33 +2116,6 @@ HTML_UI = r"""<!DOCTYPE html>
       <div class="archive-list" id="archiveList"></div>
     </div>
 
-    <nav class="tool-nav" aria-label="Tools">
-      <div class="sidebar-section-title">Tools</div>
-      <button class="tool-nav-btn active" data-tab="chat" onclick="switchTab('chat', this)" title="Chat">
-        <span class="ico" aria-hidden="true">💬</span><span class="label">Chat</span>
-      </button>
-      <button class="tool-nav-btn" data-tab="sandbox" onclick="switchTab('sandbox', this)" title="Sandbox &amp; terminal">
-        <span class="ico" aria-hidden="true">🧪</span><span class="label">Sandbox</span>
-      </button>
-      <button class="tool-nav-btn" data-tab="ide" onclick="switchTab('ide', this); ideInit();" title="Code IDE">
-        <span class="ico" aria-hidden="true">⌨️</span><span class="label">IDE</span>
-      </button>
-      <button class="tool-nav-btn" data-tab="gallery" onclick="switchTab('gallery', this); loadGallery();" title="Image gallery">
-        <span class="ico" aria-hidden="true">🎨</span><span class="label">Gallery</span>
-      </button>
-      <button class="tool-nav-btn" data-tab="editor" onclick="switchTab('editor', this); loadEditorPicker();" title="Image editor">
-        <span class="ico" aria-hidden="true">🖌️</span><span class="label">Editor</span>
-      </button>
-      <button class="tool-nav-btn" data-tab="security" onclick="switchTab('security', this)" title="Security lab">
-        <span class="ico" aria-hidden="true">🛡️</span><span class="label">Security</span>
-      </button>
-      <button class="tool-nav-btn" data-tab="benchmark" onclick="switchTab('benchmark', this); loadBenchmarkModels();" title="Benchmark">
-        <span class="ico" aria-hidden="true">⚡</span><span class="label">Benchmark</span>
-      </button>
-      <button class="tool-nav-btn" data-tab="video" onclick="switchTab('video', this); loadVideoStudio();" title="Video studio">
-        <span class="ico" aria-hidden="true">🎬</span><span class="label">Video</span>
-      </button>
-    </nav>
 
     <div class="system-strip" onclick="openModels()" title="Manage models &amp; storage">
       <div class="ss-row"><span>SSD ROM</span><strong id="romSize">0.00 MB</strong></div>
@@ -2040,6 +2142,17 @@ HTML_UI = r"""<!DOCTYPE html>
         <span class="tag">OFFLINE</span>
       </div>
       <span class="top-chip" id="demoChip" style="display:none;" title="No GGUF installed — replies are simulated locally">🧪 Demo</span>
+      <nav class="tool-strip" aria-label="Tools">
+        <button class="tool-strip-btn active" data-tab="chat" onclick="switchTab('chat')" title="Chat">💬<span class="label">Chat</span></button>
+        <button class="tool-strip-btn new" onclick="newChat()" title="New chat (Ctrl+Shift+O)">＋<span class="label">New</span></button>
+        <span class="strip-sep" aria-hidden="true"></span>
+        <button class="tool-strip-btn" data-tab="ide" onclick="switchTab('ide'); ideInit();" title="Code IDE + agent">⌨️<span class="label">IDE</span></button>
+        <button class="tool-strip-btn" data-tab="gallery" onclick="switchTab('gallery'); loadGallery();" title="Image gallery">🎨<span class="label">Gallery</span></button>
+        <button class="tool-strip-btn" data-tab="editor" onclick="switchTab('editor'); loadEditorPicker();" title="Image editor">🖌️<span class="label">Editor</span></button>
+        <button class="tool-strip-btn" data-tab="security" onclick="switchTab('security')" title="Security lab">🛡️<span class="label">Security</span></button>
+        <button class="tool-strip-btn" data-tab="benchmark" onclick="switchTab('benchmark'); loadBenchmarkModels();" title="Benchmark">⚡<span class="label">Bench</span></button>
+        <button class="tool-strip-btn" data-tab="video" onclick="switchTab('video'); loadVideoStudio();" title="Video studio">🎬<span class="label">Video</span></button>
+      </nav>
       <span class="topbar-spacer"></span>
       <button class="chip-btn accent" onclick="openModels()" title="Models &amp; storage">🧠 <span class="t-label">Models</span></button>
       <button class="chip-btn" id="offlineModeBtn" onclick="toggleOfflineMode()" title="Offline mode">✈️ <span class="t-label">Offline</span></button>
@@ -2086,8 +2199,6 @@ HTML_UI = r"""<!DOCTYPE html>
           </div>
           <div class="composer-tools">
             <button type="button" id="imageModeBtn" class="tool-btn" onclick="toggleImageMode()" title="Toggle image generation mode">🎨 Image</button>
-            <button type="button" class="tool-btn" onclick="switchTab('sandbox')" title="Open the sandbox &amp; terminal">🧪 <span class="t-label">Sandbox</span></button>
-            <button type="button" class="tool-btn" onclick="newChat()" title="Start a new chat (Ctrl+Shift+O)">✦ <span class="t-label">New</span></button>
             <button type="button" id="quantumToggleBtn" class="tool-btn active" onclick="toggleQuantumMode()" title="Quantum reasoning enabled">⚛️ Quantum ON</button>
             <span class="spacer"></span>
             <select id="brainSelect" class="model-select" onchange="selectBrain()" title="Model / brain used for replies">
@@ -2274,20 +2385,45 @@ HTML_UI = r"""<!DOCTYPE html>
         <!-- Right: Antigravity AI Agent + Live Preview -->
         <div style="grid-row:1/3;background:#181818;display:flex;flex-direction:column;overflow:hidden;">
           <div style="padding:6px 8px;background:#252526;border-bottom:1px solid #2d2d2d;display:flex;gap:6px;">
-            <button class="btn-subtle" id="ideRightAiBtn" onclick="ideSwitchRight('ai')" style="flex:1;font-size:0.75rem;background:#094771;color:#fff;">🤖 Antigravity AI</button>
+            <button class="btn-subtle" id="ideRightAiBtn" onclick="ideSwitchRight('ai')" style="flex:1;font-size:0.75rem;background:#094771;color:#fff;">🤖 Agent</button>
             <button class="btn-subtle" id="ideRightPrevBtn" onclick="ideSwitchRight('preview')" style="flex:1;font-size:0.75rem;">🌐 Live Preview</button>
           </div>
-          <div id="ideAiPane" style="flex:1;display:flex;flex-direction:column;overflow:hidden;padding:8px;gap:8px;">
-            <div style="display:flex;gap:4px;flex-wrap:wrap;">
-              <button class="btn-subtle" onclick="ideAiAssist('Refactor and improve this code')" style="font-size:0.72rem;padding:4px 7px;">✨ Refactor</button>
-              <button class="btn-subtle" onclick="ideAiAssist('Fix the recent terminal error in this file', true)" style="font-size:0.72rem;padding:4px 7px;">🔧 Fix Error</button>
-              <button class="btn-subtle" onclick="ideAiAssist('Explain this code concisely')" style="font-size:0.72rem;padding:4px 7px;">📝 Explain</button>
+          <div id="ideAiPane" class="agent-pane">
+            <div class="agent-modes" role="tablist" aria-label="Agent mode">
+              <button class="agent-mode active" data-mode="auto" role="tab" aria-selected="true"
+                      onclick="agentSetMode('auto')" title="Plan, edit and run automatically">🤖 Auto</button>
+              <button class="agent-mode" data-mode="turbo" role="tab" aria-selected="false"
+                      onclick="agentSetMode('turbo')" title="Apply immediately with minimal narration">⚡ Turbo</button>
+              <button class="agent-mode" data-mode="review" role="tab" aria-selected="false"
+                      onclick="agentSetMode('review')" title="Propose a diff and wait for approval">🔍 Request review</button>
             </div>
-            <div id="ideAiOutput" style="flex:1;overflow-y:auto;background:#111;border:1px solid #2d2d2d;border-radius:8px;padding:8px;font-size:0.8rem;white-space:pre-wrap;color:#e2e8f0;">Open a file and ask Antigravity AI to edit, fix errors, or explain code.</div>
-            <button id="ideApplyBtn" class="btn-subtle" onclick="ideApplyCode()" style="display:none;background:#065f46;color:#ecfdf5;border-color:#10b981;">✅ Apply Code to Editor</button>
-            <div style="display:flex;gap:6px;">
-              <input id="ideAiPrompt" type="text" placeholder="Ask Antigravity AI..." style="flex:1;font-size:0.78rem;padding:6px 8px;" onkeydown="if(event.key==='Enter')ideAiAssist();" />
-              <button class="btn-subtle" onclick="ideAiAssist()" style="padding:6px 10px;">Send</button>
+            <div class="agent-chips">
+              <button class="agent-chip" onclick="agentQuick('review this file')" title="Static review of the open file">🔎 Review</button>
+              <button class="agent-chip" onclick="agentQuick('add tests')" title="Write a unittest file for this module">🧪 Tests</button>
+              <button class="agent-chip" onclick="agentQuick('add docstrings')" title="Insert missing docstrings">📝 Docstrings</button>
+              <button class="agent-chip" onclick="agentQuick('clean up formatting')" title="Normalise whitespace and line endings">🧹 Clean</button>
+              <button class="agent-chip" onclick="agentQuick('run it')" title="Execute the open file">▶ Run</button>
+            </div>
+            <div id="agentTranscript" class="agent-transcript">
+              <div class="agent-empty">
+                <strong>Agent ready.</strong><br>
+                It reads the open file, performs a real operation and shows you the diff.
+                No model weights are installed, so it works from parsers and the recipe library — never guesses.
+              </div>
+            </div>
+            <div id="agentReview" class="agent-review" style="display:none;">
+              <div class="agent-review-head">Proposed changes <span id="agentReviewMeta"></span></div>
+              <pre id="agentDiff" class="agent-diff"></pre>
+              <div class="agent-review-actions">
+                <button class="agent-apply" onclick="agentApprove()">✅ Apply</button>
+                <button class="agent-discard" onclick="agentReject()">✕ Reject</button>
+              </div>
+            </div>
+            <div class="agent-compose">
+              <textarea id="agentPrompt" rows="2" spellcheck="false"
+                        placeholder="Ask the agent… e.g. “create utils.py with a retry decorator”"
+                        onkeydown="agentKey(event)"></textarea>
+              <button id="agentSend" class="agent-send" onclick="agentRun()" title="Send (Enter)">➤</button>
             </div>
           </div>
           <div id="idePreviewPane" style="display:none;flex:1;flex-direction:column;overflow:hidden;padding:8px;">
@@ -2298,7 +2434,10 @@ HTML_UI = r"""<!DOCTYPE html>
         <!-- Bottom: Integrated Full-System Terminal -->
         <div style="background:#0c0c0c;border-top:1px solid #2d2d2d;border-right:1px solid #2d2d2d;display:flex;flex-direction:column;overflow:hidden;">
           <div style="padding:4px 10px;background:#181818;border-bottom:1px solid #2d2d2d;display:flex;justify-content:space-between;align-items:center;font-size:0.74rem;">
-            <span style="color:#34d399;font-weight:700;">💻 TERMINAL (Full PC Access)</span>
+            <span style="color:#34d399;font-weight:700;">💻 TERMINAL (Full PC Access)
+              <button class="btn-subtle" onclick="switchTab('sandbox')" title="Open the sandbox &amp; terminal studio"
+                      style="margin-left:8px;padding:1px 7px;font-size:0.68rem;">🧪 Sandbox</button>
+            </span>
             <span id="ideTermCwd" style="color:#94a3b8;font-family:ui-monospace,Consolas,monospace;"></span>
           </div>
           <pre id="ideTermOut" style="flex:1;margin:0;padding:8px 10px;overflow-y:auto;font-family:ui-monospace,Consolas,monospace;font-size:0.78rem;color:#d4d4d4;white-space:pre-wrap;"></pre>
@@ -2476,11 +2615,16 @@ HTML_UI = r"""<!DOCTYPE html>
 
     function switchTab(name, btn) {
       document.querySelectorAll('.tab-view').forEach(el => el.classList.remove('active'));
-      document.querySelectorAll('.tool-nav-btn').forEach(el => el.classList.remove('active'));
+      document.querySelectorAll('.tool-nav-btn, .tool-strip-btn').forEach(el => el.classList.remove('active'));
       const view = document.getElementById('tab-' + name);
       if (view) view.classList.add('active');
       const target = btn || document.querySelector(`.tool-nav-btn[data-tab="${name}"]`);
       if (target && target.classList) target.classList.add('active');
+      const stripBtn = document.querySelector(`.tool-strip-btn[data-tab="${name}"]`);
+      if (stripBtn) {
+        stripBtn.classList.add('active');
+        try { stripBtn.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (e) {}
+      }
       if (name === 'chat') {
         updateScrollFab();
         const input = document.getElementById('promptInput');
@@ -4425,41 +4569,239 @@ print("Primes < 50:", primes)`;
       document.getElementById('ideRightPrevBtn').style.background = which === 'preview' ? '#094771' : '';
     }
 
-    async function ideAiAssist(preset = null, includeErr = false) {
-      const inp = document.getElementById('ideAiPrompt');
-      const prompt = preset || inp.value.trim();
-      if (!prompt) return;
-      if (!preset) inp.value = '';
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      const out = document.getElementById('ideAiOutput');
-      out.textContent = '⏳ Antigravity AI is thinking...';
-      const res = await fetch('/api/ide/ai_assist', {
-        method: 'POST',
-        headers: {'Content-Type':'application/json'},
-        body: JSON.stringify({
-          prompt,
-          filename: cur ? cur.name : 'untitled',
-          code: cur ? cur.content : '',
-          error: includeErr ? ideLastError : ''
-        })
+    /* ---------------- coding agent: Auto / Turbo / Request review ---------------- */
+    let agentMode = 'auto';
+    let agentToken = null;
+    let agentBusy = false;
+
+    const AGENT_MODE_HINT = {
+      auto: 'Auto — the agent plans, edits and runs, then shows you the diff.',
+      turbo: 'Turbo — applies immediately with minimal narration.',
+      review: 'Request review — proposes the diff and waits for your approval.'
+    };
+
+    function agentSetMode(mode) {
+      agentMode = mode;
+      document.querySelectorAll('.agent-mode').forEach(btn => {
+        const on = btn.dataset.mode === mode;
+        btn.classList.toggle('active', on);
+        btn.setAttribute('aria-selected', on ? 'true' : 'false');
       });
-      const data = await res.json();
-      out.textContent = data.reply || 'No response.';
-      const m = (data.reply || '').match(/```[\w]*\n([\s\S]*?)```/);
-      if (m) {
-        ideLastAiCode = m[1];
-        document.getElementById('ideApplyBtn').style.display = 'block';
-      } else {
-        document.getElementById('ideApplyBtn').style.display = 'none';
+      toast(AGENT_MODE_HINT[mode] || mode, 'info', 2200);
+    }
+
+    function agentKey(e) {
+      if (e.key === 'Enter' && !e.shiftKey) {
+        e.preventDefault();
+        agentRun();
       }
     }
 
-    function ideApplyCode() {
-      const cur = ideOpenTabs.find(t => t.path === ideActivePath);
-      if (!cur || !ideLastAiCode) return;
-      cur.content = ideLastAiCode;
-      cur.dirty = true;
-      ideRenderTabs();
+    function agentQuick(prompt) {
+      const el = document.getElementById('agentPrompt');
+      if (el) el.value = prompt;
+      agentRun();
+    }
+
+    function agentActiveTab() {
+      return ideOpenTabs.find(t => t.path === ideActivePath) || null;
+    }
+
+    function agentClearEmpty() {
+      const empty = document.querySelector('#agentTranscript .agent-empty');
+      if (empty) empty.remove();
+    }
+
+    function agentAppend(html, className) {
+      agentClearEmpty();
+      const host = document.getElementById('agentTranscript');
+      const wrap = document.createElement('div');
+      if (className) wrap.className = className;
+      wrap.innerHTML = html;
+      host.appendChild(wrap);
+      host.scrollTop = host.scrollHeight;
+      return wrap;
+    }
+
+    function agentStepRow(step) {
+      const icon = { edit: '✏️', note: '📄', run: '▶', read: '👁', error: '⚠️' }[step.kind] || '•';
+      const head = document.createElement('div');
+      head.className = 'agent-step-head';
+      const iconEl = document.createElement('span');
+      iconEl.className = 'agent-step-icon';
+      iconEl.textContent = icon;
+      const title = document.createElement('span');
+      title.className = 'agent-step-title';
+      title.textContent = step.title || step.kind || 'step';
+      head.appendChild(iconEl);
+      head.appendChild(title);
+      if (step.status) {
+        const chip = document.createElement('span');
+        chip.className = 'agent-status ' + step.status;
+        chip.textContent = step.status;
+        head.appendChild(chip);
+      }
+      const row = document.createElement('div');
+      row.className = 'agent-step' + (step.kind === 'error' ? ' error' : '');
+      row.appendChild(head);
+      if (step.path) {
+        const path = document.createElement('div');
+        path.className = 'agent-step-path';
+        path.textContent = step.path;
+        row.appendChild(path);
+      }
+      if (step.notes) {
+        const body = document.createElement('div');
+        body.className = 'agent-step-body';
+        body.innerHTML = renderRichMarkdown(step.notes);
+        row.appendChild(body);
+      }
+      if (step.diff) {
+        const pre = document.createElement('pre');
+        pre.className = 'agent-diff';
+        pre.textContent = step.diff;
+        row.appendChild(pre);
+      }
+      agentClearEmpty();
+      const host = document.getElementById('agentTranscript');
+      host.appendChild(row);
+      host.scrollTop = host.scrollHeight;
+      return row;
+    }
+
+    async function agentReloadFile(path) {
+      const tab = ideOpenTabs.find(t => t.path === path);
+      if (!tab) return;
+      try {
+        const res = await fetch('/api/ide/files', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ action: 'read', path })
+        });
+        const data = await readJsonSafe(res);
+        if (typeof data.content === 'string') {
+          tab.content = data.content;
+          tab.dirty = false;
+        }
+        ideRenderTabs();
+      } catch (e) {}
+    }
+
+    async function agentRun() {
+      if (agentBusy) return;
+      const input = document.getElementById('agentPrompt');
+      const prompt = (input && input.value || '').trim();
+      if (!prompt) { toast('Tell the agent what to do first', 'info'); return; }
+
+      agentBusy = true;
+      agentToken = null;
+      const sendBtn = document.getElementById('agentSend');
+      if (sendBtn) sendBtn.disabled = true;
+      const reviewCard = document.getElementById('agentReview');
+      if (reviewCard) reviewCard.style.display = 'none';
+
+      const cur = agentActiveTab();
+      agentAppend(`<div class="agent-step-head"><span class="agent-step-icon">🧠</span><span class="agent-step-title">Working in ${agentMode} mode…</span></div>`, 'agent-step');
+
+      try {
+        const res = await fetch('/api/ide/agent', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            prompt,
+            mode: agentMode,
+            path: cur ? cur.path : null,
+            cwd: ideCwd || null,
+            content: cur ? cur.content : null
+          })
+        });
+        const data = await readJsonSafe(res);
+        const host = document.getElementById('agentTranscript');
+        if (host && host.lastElementChild && /Working in/.test(host.lastElementChild.textContent)) {
+          host.removeChild(host.lastElementChild);
+        }
+        if (!data.ok) {
+          agentStepRow({ kind: 'error', title: data.error || 'The agent could not complete that.' });
+          toast(data.error || 'Agent failed', 'err');
+          return;
+        }
+        if (Array.isArray(data.plan) && data.plan.length) {
+          agentAppend(`<div class="agent-plan">${data.plan.map((p, i) => `${i + 1}. ${p}`).join('  ·  ')}</div>`);
+        }
+        (data.steps || []).forEach(agentStepRow);
+        (data.touched || []).forEach(p => agentReloadFile(p));
+
+        if (data.awaiting_review && data.staged_id) {
+          agentToken = data.staged_id;
+          const diffHost = document.getElementById('agentDiff');
+          diffHost.textContent = (data.steps || []).map(x => x.diff).filter(Boolean).join('\n\n') || '(no textual diff)';
+          document.getElementById('agentReviewMeta').textContent = `· ${data.ms} ms`;
+          reviewCard.style.display = 'flex';
+          toast('Review the diff, then apply or reject', 'info');
+        } else if (data.staged_id && (data.touched || []).length) {
+          agentToken = data.staged_id;
+          const undo = document.createElement('button');
+          undo.className = 'agent-chip';
+          undo.textContent = '↩ Undo this run';
+          undo.onclick = agentUndo;
+          const host = document.getElementById('agentTranscript');
+          const row = document.createElement('div');
+          row.className = 'agent-plan';
+          row.appendChild(undo);
+          host.appendChild(row);
+          host.scrollTop = host.scrollHeight;
+          toast('Agent applied the changes', 'ok');
+        } else if ((data.steps || []).some(step => step.kind === 'note')) {
+          toast('Agent finished', 'ok');
+        }
+        if (input) input.value = '';
+      } catch (err) {
+        agentStepRow({ kind: 'error', title: 'Agent request failed: ' + err.message });
+        toast('Agent request failed', 'err');
+      } finally {
+        agentBusy = false;
+        if (sendBtn) sendBtn.disabled = false;
+      }
+    }
+
+    async function agentApprove() {
+      if (!agentToken) return;
+      const res = await fetch('/api/ide/agent/apply', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: agentToken })
+      });
+      const data = await readJsonSafe(res);
+      document.getElementById('agentReview').style.display = 'none';
+      if (!data.ok) { toast(data.error || 'Could not apply', 'err'); return; }
+      (data.touched || []).forEach(p => agentReloadFile(p));
+      agentStepRow({ kind: 'note', title: 'Applied', notes: `Wrote ${(data.touched || []).length} file(s): ` +
+        (data.touched || []).map(p => '`' + p.split('/').pop() + '`').join(', ') });
+      toast('Changes applied', 'ok');
+    }
+
+    async function agentReject() {
+      if (agentToken) {
+        await fetch('/api/ide/agent/discard', {
+          method: 'POST', headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ token: agentToken })
+        }).catch(() => {});
+      }
+      agentToken = null;
+      document.getElementById('agentReview').style.display = 'none';
+      agentStepRow({ kind: 'note', title: 'Rejected', notes: 'No files were written.' });
+      toast('Changes discarded', 'info');
+    }
+
+    async function agentUndo() {
+      if (!agentToken) { toast('Nothing to undo in this session', 'info'); return; }
+      const res = await fetch('/api/ide/agent/revert', {
+        method: 'POST', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ token: agentToken })
+      });
+      const data = await readJsonSafe(res);
+      if (!data.ok) { toast(data.error || 'Undo failed', 'err'); return; }
+      (data.reverted || []).forEach(p => agentReloadFile(p));
+      agentStepRow({ kind: 'note', title: 'Reverted', notes: 'Restored the files to their previous contents.' });
+      agentToken = null;
+      toast('Reverted', 'ok');
     }
 
     // === VS CODE + ANTIGRAVITY IDE LOGIC ===
@@ -5520,6 +5862,25 @@ class ArgonHandler(BaseHTTPRequestHandler):
             err = str(data.get("error", ""))
             lang = str(data.get("lang", "python"))
             self._send_json(line_by_line_fix_code(code, err, lang=lang))
+        elif self.path == "/api/ide/agent":
+            import code_agent
+            try:
+                result = code_agent.run(
+                    prompt=str(data.get("prompt", "")),
+                    mode=str(data.get("mode", "auto")),
+                    path=(str(data.get("path", "")).strip() or None),
+                    cwd=str(data.get("cwd", "") or TERMINAL_CWD),
+                    content=data.get("content") if isinstance(data.get("content"), str) else None,
+                )
+            except Exception as exc:  # never take the server down for an agent request
+                result = {"ok": False, "error": str(exc)}
+            self._send_json(result)
+        elif self.path in ("/api/ide/agent/apply", "/api/ide/agent/discard", "/api/ide/agent/revert"):
+            import code_agent
+            token = str(data.get("token", "")).strip()
+            action = self.path.rsplit("/", 1)[-1]
+            fn = {"apply": code_agent.apply, "discard": code_agent.discard, "revert": code_agent.revert}[action]
+            self._send_json(fn(token))
         elif self.path == "/api/ide/ai_assist":
             prompt = str(data.get("prompt", "")).strip()
             filename = str(data.get("filename", "untitled")).strip()

@@ -84,7 +84,41 @@ handling, cold/warm latency) and exits non-zero on any failure.
   `python download_models.py --recommended`) and the real engine takes over on the next message.
 - Turn it off entirely: `ARGON_DEMO_BRAIN=0 python app.py`.
 
+## Code IDE + agent
+
+The IDE is a browser VS Code: file explorer, tabbed editor with line numbers, run
+button, live HTML preview, and a full terminal.
+
+The right-hand **agent** pane is modelled on agentic editors like Antigravity, with
+three explicit modes:
+
+| Mode | Behaviour |
+|---|---|
+| 🤖 **Auto** | Plans, edits and runs, then shows the plan and every diff. |
+| ⚡ **Turbo** | Applies immediately with minimal narration. |
+| 🔍 **Request review** | Stages the change, shows the unified diff, and writes nothing until you press **Apply**. |
+
+It performs **real file operations** (`code_agent.py`), not vibes: create a file from
+the recipe library or a typed scaffold, write a unittest file covering the module's
+functions, insert missing docstrings, normalise formatting (CRLF, trailing whitespace,
+tabs, blank-line runs), run the file, explain its structure, or run static review
+findings — bare `except:`, mutable default arguments, over-long lines, TODO markers,
+`eval`/`os.system` usage. Every edit comes with a diff and can be undone from the
+transcript (**↩ Undo this run**) or reverted server-side.
+
+Because no model weights are installed, the agent is explicit about what it is: a
+planner over parsers and templates. It will not invent an implementation — the test
+file it writes has TODO bodies for the assertions, and the review lists only what the
+static checks actually found.
+
 ## UI & UX
+
+- **Tool strip (top bar)**: ChatGPT-style switcher — Chat, New chat, IDE, Gallery,
+  Editor, Security, Benchmark, Video — with the active tool highlighted. It scrolls
+  horizontally on narrow screens and collapses to icons.
+- **Sandbox** is no longer a top-level tool: it opens from the IDE's terminal header,
+  since the IDE terminal already covers day-to-day execution.
+
 
 - **Composer**: auto-growing input, image / terminal / quantum toggles, thinking-level
   selector, live character count, `Enter` send · `Shift+Enter` newline.
