@@ -2343,6 +2343,14 @@ HTML_UI = r"""<!DOCTYPE html>
     .models-panel .model-row { flex-wrap: wrap; gap: 6px 10px; }
     .models-panel .model-row .m-state { margin-left: 0; width: 100%; justify-content: space-between; }
 
+    /* ---------- sidebar: only the chat list scrolls ----------
+       A scrolled rail pushes the brand, New chat and the field row out of view, which makes the
+       panel look like it jumped. Contain every inner scroller instead of chaining outwards. */
+    .sidebar, .sidebar * { overscroll-behavior: contain; }
+    html { scroll-behavior: auto; }
+    .sidebar-search, .sidebar .btn-new-chat, .sidebar-header, .sidebar-actions,
+    .sidebar-foot, .archive-toggle { scroll-margin: 0; }
+
     /* ---------- search chats row (between Tools and Recent chats) ---------- */
     .sidebar-search.search-row {
       display: flex; align-items: center; gap: 8px; width: auto;
@@ -2531,7 +2539,8 @@ HTML_UI = r"""<!DOCTYPE html>
   <main class="main">
     <header class="topbar">
       <button class="icon-btn" id="openSidebarBtn" onclick="toggleSidebar()" title="Open sidebar (Ctrl+B)" style="display:none;">☰</button>
-      <div class="model-pill" onclick="switchTab('chat')" title="Back to chat">
+      <div class="model-pill" onclick="newChat()" title="New chat" role="button" tabindex="0"
+           onkeydown="if(event.key==='Enter'||event.key===' '){event.preventDefault();newChat();}">
         <span class="brand-mark" aria-hidden="true">✦</span>
         <span class="brand-name">ARGON-OMEGA</span>
         <span class="tag">OFFLINE</span>
@@ -3056,7 +3065,7 @@ HTML_UI = r"""<!DOCTYPE html>
       field.style.display = '';
       if (btn) btn.style.display = 'none';
       const input = document.getElementById('chatSearchInput');
-      if (input) { try { input.focus(); input.select(); } catch (e) {} }
+      if (input) { focusNoJump(input); try { input.select(); } catch (e) {} }
     }
     function blurChatSearch() {
       const field = document.getElementById('chatSearchField');
@@ -3068,6 +3077,14 @@ HTML_UI = r"""<!DOCTYPE html>
         field.style.display = 'none';
         if (btn) btn.style.display = '';
       }
+    }
+
+    /* Focusing an input scrolls its scroll container so the caret is visible — on a phone
+       that could slide the whole rail (brand + New chat) out of view. Always ask for an
+       instant, minimal scroll instead, so pressing New chat cannot "scroll the sidebar". */
+    function focusNoJump(el) {
+      if (!el || typeof el.focus !== 'function') return;
+      try { el.focus({ preventScroll: true }); } catch (e) { try { el.focus(); } catch (err) {} }
     }
 
     /* Esc in the search box clears the filter and folds the row back to a button */
@@ -3174,7 +3191,7 @@ HTML_UI = r"""<!DOCTYPE html>
       if (name === 'chat') {
         updateScrollFab();
         const input = document.getElementById('promptInput');
-        if (input && window.innerWidth > 820) input.focus();
+        if (input && window.innerWidth > 820) focusNoJump(input);
       }
       if (name === 'sandbox') setTimeout(sandboxUpdateLineNums, 0);
       if (window.innerWidth <= 820) closeSidebarOnMobile();
@@ -3249,6 +3266,15 @@ HTML_UI = r"""<!DOCTYPE html>
       }
       const q = document.getElementById('chatSearchInput');
       if (q && q.value) filterHistory(q.value);
+      keepRailInPlace();
+    }
+
+    /* The rail itself is not a scroller on desktop (the chat list is), but short windows and
+       old browsers can still scroll it — after any re-render the top row must stay put. */
+    function keepRailInPlace() {
+      const sb = document.getElementById('sidebar');
+      if (!sb) return;
+      if (window.getComputedStyle(sb).overflowY !== 'visible' && sb.scrollTop) sb.scrollTop = 0;
     }
 
     function toggleArchiveList(force) {
@@ -3386,9 +3412,15 @@ HTML_UI = r"""<!DOCTYPE html>
 
     function newChat(opts) {
       const silent = !!(opts && opts.silent) || routeSilent;
+      /* Always end on the Chat screen. It used to bail out with only a URL push when the
+         Chat tab was already active, so pressing "New chat" (or the ✦ logo) while reading a
+         conversation left that conversation on screen — it looked like nothing happened. */
       if (!silent) {
-        if (document.getElementById('tab-chat')?.classList.contains('active')) pushRoute('/chat');
-        else switchTab('chat');
+        if (!document.getElementById('tab-chat')?.classList.contains('active')) {
+          switchTab('chat', null, { silent: true });      // leave the other screen silently…
+        }
+        pushRoute('/chat');                                // …then one history entry: /chat
+        setDocTitle(NAV_TITLE['chat'] || '');
       }
       currentChatId = null;
       const box = document.getElementById('chatBox');
@@ -3396,7 +3428,8 @@ HTML_UI = r"""<!DOCTYPE html>
       renderHistory();
       const sc = document.getElementById('chatScroll');
       if (sc) sc.scrollTop = 0;
-      promptInput.focus();
+      focusNoJump(promptInput);
+      keepRailInPlace();
     }
 
     function loadChat(id, opts) {
@@ -4076,7 +4109,7 @@ HTML_UI = r"""<!DOCTYPE html>
       promptInput.placeholder = imageMode
         ? 'Describe an image to generate (Flux AI / Offline SVG)...'
         : 'Message ARGON-OMEGA...';
-      promptInput.focus();
+      focusNoJump(promptInput);
     }
 
     function hasCodingIntent(prompt) {
@@ -4262,7 +4295,7 @@ HTML_UI = r"""<!DOCTYPE html>
       if (e && e.preventDefault) e.preventDefault();
       if (isSending) { toast('Still generating — press Esc to stop.', 'info'); return; }
       const text = promptInput.value.trim();
-      if (!text) { promptInput.focus(); return; }
+      if (!text) { focusNoJump(promptInput); return; }
 
       lastUserPrompt = text;
       promptInput.value = '';
@@ -5002,7 +5035,7 @@ print("Primes < 50:", primes)`;
         ed.placeholder = '# Python or HTML5/JS — then Run (Ctrl+Enter)';
       }
       sandboxUpdateLineNums();
-      ed.focus();
+      focusNoJump(ed);
     }
 
     function clearSandbox() {
@@ -5789,6 +5822,7 @@ print("Primes < 50:", primes)`;
         empty.remove();
       }
       if (q && archVisible && archList) toggleArchiveList(true);
+      keepRailInPlace();
     }
     function updateComposerMeta() {
       const count = document.getElementById('charCount');
@@ -6008,7 +6042,7 @@ print("Primes < 50:", primes)`;
         const meta = e.ctrlKey || e.metaKey;
         if (meta && e.key.toLowerCase() === 'k') {
           e.preventDefault();
-          promptInput.focus();
+          focusNoJump(promptInput);
           promptInput.select();
         } else if (meta && e.key.toLowerCase() === 'b') {
           e.preventDefault();

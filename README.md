@@ -155,6 +155,14 @@ static checks actually found.
   the URL; picking a result is what moves you to `/chat`.
 - **Top bar is minimal**: brand, demo chip and the offline toggle only — Models and Settings
   are not up there any more.
+- **The ✦ logo starts a new chat**: the brand pill in the top bar (next to the demo chip) and
+  the sidebar's ＋ New chat button both clear the conversation, show the welcome screen and
+  land on `/chat` — even when you are already reading a chat.
+- **The rail never scrolls itself**: the chat list owns the scrolling, every inner scroller
+  is contained (no scroll chaining out to the rail or the page), all `focus()` calls use
+  `preventScroll` so focusing the composer can never slide the brand/New chat row out of
+  view, and re-rendering the list (New chat, search, archive toggle) resets the rail to the
+  top defensively for short windows.
 - **Search chats sits between Tools and Recent chats**, where you look for it: it shows as a
   compact row, expands into a text field on tap (Esc clears and folds it back), filters while
   you type, and never rewrites the URL.
