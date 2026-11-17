@@ -1935,6 +1935,40 @@ HTML_UI = r"""<!DOCTYPE html>
       .sidebar .system-strip { padding: 7px 9px; gap: 4px; }
     }
 
+    /* ---------- sidebar: tools drawer ---------- */
+    .tools-drawer { margin: 0 8px 6px; }
+    .tools-toggle {
+      display: flex; align-items: center; justify-content: space-between; width: 100%;
+      min-height: 42px; padding: 8px 10px; cursor: pointer;
+      background: rgba(148,163,184,.06); border: 1px solid var(--border-subtle); border-radius: 10px;
+      color: #c9d6e4; font-family: inherit; font-size: .74rem; font-weight: 800;
+      letter-spacing: .08em; text-transform: uppercase;
+      touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+    }
+    .tools-toggle:hover { background: rgba(148,163,184,.12); color: #fff; }
+    .tools-toggle .tt-label { display: inline-flex; align-items: center; gap: 8px; }
+    .tools-caret { transition: transform .18s ease; font-size: .8rem; color: #8fa1b4; }
+    .tools-drawer.closed .tools-caret { transform: rotate(-90deg); }
+    .tools-list {
+      display: flex; flex-direction: column; gap: 2px;
+      padding: 4px 0 2px; overflow: hidden;
+      max-height: 420px; transition: max-height .2s ease, opacity .16s ease;
+    }
+    .tools-drawer.closed .tools-list { max-height: 0; opacity: 0; padding: 0; pointer-events: none; }
+    .tools-item {
+      display: flex; align-items: center; gap: 10px; width: 100%;
+      min-height: 44px; padding: 9px 12px; border-radius: 10px; cursor: pointer;
+      background: transparent; border: 1px solid transparent;
+      color: #c6d4e2; font-family: inherit; font-size: .84rem; font-weight: 600; text-align: left;
+      touch-action: manipulation; -webkit-tap-highlight-color: transparent;
+      transition: background .15s ease, color .15s ease, border-color .15s ease;
+    }
+    .tools-item:hover { background: rgba(148,163,184,.12); color: #fff; }
+    .tools-item.active {
+      background: rgba(16,185,129,.15); border-color: rgba(16,185,129,.38); color: #d8fff3; font-weight: 800;
+    }
+    .tools-item .ti-icon { width: 18px; text-align: center; font-size: .95rem; }
+
     /* ---------- sidebar: touch sizing ---------- */
     .sidebar { -webkit-tap-highlight-color: transparent; }
     .sidebar button,
@@ -1989,37 +2023,6 @@ HTML_UI = r"""<!DOCTYPE html>
     .system-strip .progress-bar { height: 7px; }
     .sidebar-foot { min-height: 40px; font-size: .72rem; }
 
-    /* ---------- bottom navigation (touch-first tool switch) ---------- */
-    .bottom-nav {
-      flex: none; display: flex; align-items: stretch; gap: 2px;
-      padding: 6px 8px calc(6px + env(safe-area-inset-bottom, 0px));
-      background: #0a0e13;
-      border-top: 1px solid var(--border-subtle);
-      overflow-x: auto; overflow-y: hidden; scrollbar-width: none;
-      z-index: 15;
-    }
-    .bottom-nav::-webkit-scrollbar { display: none; }
-    .nav-item {
-      flex: 1 1 0; min-width: 62px; min-height: 52px;
-      display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 3px;
-      padding: 4px 6px; border-radius: 12px;
-      border: 1px solid transparent; background: transparent; cursor: pointer;
-      color: #9fb0c2; font-family: inherit; font-size: .63rem; font-weight: 700;
-      -webkit-tap-highlight-color: transparent; touch-action: manipulation;
-      transition: background .15s ease, color .15s ease, border-color .15s ease;
-    }
-    .nav-item .nav-icon { font-size: 1.15rem; line-height: 1; }
-    .nav-item .nav-label { white-space: nowrap; }
-    .nav-item:hover { background: rgba(148,163,184,.12); color: #fff; }
-    .nav-item:active { transform: scale(.96); }
-    .nav-item.active {
-      background: rgba(16,185,129,.16); border-color: rgba(16,185,129,.42); color: #d8fff3;
-    }
-    @media (max-width: 900px) {
-      .nav-item { min-width: 64px; min-height: 56px; }
-      .nav-item .nav-label { font-size: .59rem; }
-    }
-
     /* ---------- touch sizing ---------- */
     button, .chip-btn, .icon-btn, select, input[type="text"], input[type="search"], textarea {
       touch-action: manipulation;
@@ -2067,6 +2070,7 @@ HTML_UI = r"""<!DOCTYPE html>
 
     /* ---------- settings ---------- */
     .settings-panel { max-width: 860px; }
+    .settings-panel.wide { max-width: 1040px; height: min(88vh, 820px); }
     .settings-layout { display: grid; grid-template-columns: 168px 1fr; gap: 14px; min-height: 0; flex: 1; overflow: hidden; }
     .settings-nav { display: flex; flex-direction: column; gap: 4px; }
     .settings-tab {
@@ -2272,6 +2276,24 @@ HTML_UI = r"""<!DOCTYPE html>
       <input id="chatSearchInput" type="search" placeholder="Search chats…" autocomplete="off" oninput="filterHistory(this.value)" />
     </label>
 
+    <div class="tools-drawer" id="toolsDrawer">
+      <button class="tools-toggle" id="toolsToggle" onclick="toggleToolsDrawer()" aria-expanded="true" aria-controls="toolsList">
+        <span class="tt-label"><span aria-hidden="true">🧰</span> Tools</span>
+        <span class="tools-caret" id="toolsCaret">▾</span>
+      </button>
+      <div class="tools-list" id="toolsList">
+        <button class="tools-item" data-tab="ide" onclick="switchTab('ide'); ideInit();">
+          <span class="ti-icon" aria-hidden="true">⌨️</span><span>Code IDE</span>
+        </button>
+        <button class="tools-item" data-tab="gallery" onclick="switchTab('gallery'); loadGallery();">
+          <span class="ti-icon" aria-hidden="true">🎨</span><span>Gallery</span>
+        </button>
+        <button class="tools-item" data-tab="video" onclick="switchTab('video'); loadVideoStudio();">
+          <span class="ti-icon" aria-hidden="true">🎬</span><span>Video studio</span>
+        </button>
+      </div>
+    </div>
+
     <div class="sidebar-section-header">
       <span class="sidebar-section-title">Recent chats</span>
     </div>
@@ -2400,6 +2422,7 @@ HTML_UI = r"""<!DOCTYPE html>
     <div id="tab-gallery" class="tab-view">
       <div class="gallery-container">
         <div class="gallery-toolbar" style="flex-wrap:wrap;gap:8px;">
+          <button class="btn-subtle" onclick="switchTab('editor'); loadEditorPicker();" title="Open the image editor">🖌️ Open image editor</button>
           <input id="galleryPrompt" type="text" placeholder="Describe the brand-new image you want to generate..." style="flex:1;min-width:220px;" />
           <select id="galleryStyle" style="max-width:180px;">
             <option value="Realistic Photo">Realistic Photo</option>
@@ -2671,62 +2694,6 @@ HTML_UI = r"""<!DOCTYPE html>
     </div>
 
     <!-- SECURITY & BUG LAB TAB -->
-    <div id="tab-security" class="tab-view">
-      <div class="lab-container">
-        <div class="lab-panel">
-          <div class="card-label">1. Local Device Security Auditor (100% Offline)</div>
-          <button class="btn-firehose" onclick="runLaptopAudit()">🛡️ Audit My Laptop Security</button>
-          <div id="auditOutput" class="output-pre">Click "Audit My Laptop Security" to scan listening ports, firewall, admin privileges, and processes.</div>
-        </div>
-
-        <div class="lab-panel">
-          <div class="card-label">2. Offline CVE &amp; Bug Bounty Vault</div>
-          <div style="display:flex; gap:8px;">
-            <input id="cveQuery" type="text" placeholder="Search CVE / SQLi / XSS / Buffer Overflow..." style="flex:1;" />
-            <button class="btn-subtle" onclick="searchCVE()">Search</button>
-          </div>
-          <button class="btn-subtle" onclick="downloadCVE()">📥 Download CVE &amp; Security Datasets</button>
-          <div id="cveOutput" class="output-pre">Search the local SSD FTS5 Vault for vulnerability patterns &amp; fixes.</div>
-        </div>
-
-        <div class="lab-panel full">
-          <div class="card-label">3. Offline Code Vulnerability &amp; Bug Scanner (SAST)</div>
-          <textarea id="codeInput" class="code-editor" placeholder="Paste Python, JS, C/C++, or SQL code here to scan for vulnerabilities..."></textarea>
-          <div style="display:flex; gap:10px;">
-            <button class="btn-firehose" style="width:auto;" onclick="scanCode()">🔍 Scan Code for Bugs &amp; Vulnerabilities</button>
-            <button class="btn-subtle" onclick="patchCode()">🔧 Auto-Patch Code</button>
-          </div>
-          <div id="sastOutput" class="output-pre">SAST Severity Report &amp; Auto-Patch output will appear here.</div>
-        </div>
-      </div>
-    </div>
-
-    <nav class="bottom-nav" aria-label="Tools">
-      <button class="nav-item active" data-tab="chat" onclick="switchTab('chat')" aria-current="page">
-        <span class="nav-icon" aria-hidden="true">💬</span><span class="nav-label">Chat</span>
-      </button>
-      <button class="nav-item" data-tab="ide" onclick="switchTab('ide'); ideInit();">
-        <span class="nav-icon" aria-hidden="true">⌨️</span><span class="nav-label">IDE</span>
-      </button>
-      <button class="nav-item" data-tab="gallery" onclick="switchTab('gallery'); loadGallery();">
-        <span class="nav-icon" aria-hidden="true">🎨</span><span class="nav-label">Gallery</span>
-      </button>
-      <button class="nav-item" data-tab="editor" onclick="switchTab('editor'); loadEditorPicker();">
-        <span class="nav-icon" aria-hidden="true">🖌️</span><span class="nav-label">Editor</span>
-      </button>
-      <button class="nav-item" data-tab="security" onclick="switchTab('security')">
-        <span class="nav-icon" aria-hidden="true">🛡️</span><span class="nav-label">Security</span>
-      </button>
-      <button class="nav-item" data-tab="benchmark" onclick="switchTab('benchmark'); loadBenchmarkModels();">
-        <span class="nav-icon" aria-hidden="true">⚡</span><span class="nav-label">Bench</span>
-      </button>
-      <button class="nav-item" data-tab="video" onclick="switchTab('video'); loadVideoStudio();">
-        <span class="nav-icon" aria-hidden="true">🎬</span><span class="nav-label">Video</span>
-      </button>
-      <button class="nav-item" onclick="openSettings()">
-        <span class="nav-icon" aria-hidden="true">⚙️</span><span class="nav-label">Settings</span>
-      </button>
-    </nav>
   </main>
 
   <div id="sidebarOverlay" class="sidebar-overlay" onclick="closeSidebarOnMobile()"></div>
@@ -2767,6 +2734,7 @@ HTML_UI = r"""<!DOCTYPE html>
         <nav class="settings-nav" aria-label="Settings sections">
           <button class="settings-tab active" data-pane="benchmark" onclick="settingsTab('benchmark')">⚡ Benchmark</button>
           <button class="settings-tab" data-pane="engine" onclick="settingsTab('engine')">🧠 Engine</button>
+          <button class="settings-tab" data-pane="security" onclick="settingsTab('security')">🛡️ Security</button>
           <button class="settings-tab" data-pane="workspace" onclick="settingsTab('workspace')">🗂 Workspace</button>
         </nav>
         <div class="settings-body">
@@ -2779,6 +2747,7 @@ HTML_UI = r"""<!DOCTYPE html>
             </div>
             <div class="set-actions">
               <button class="btn-subtle" id="setBenchRun" onclick="settingsRunBenchmark()">▶ Run benchmark</button>
+              <button class="btn-subtle" onclick="closeSettings(); switchTab('benchmark'); loadBenchmarkModels();">📊 Full benchmark view</button>
               <span class="set-note" id="setBenchStatus">18 deterministic checks · offline</span>
             </div>
             <div id="setChecks" class="set-checks"><div class="set-note">Loading checks…</div></div>
@@ -2792,6 +2761,39 @@ HTML_UI = r"""<!DOCTYPE html>
           </section>
           <section id="setPane-workspace" class="settings-pane">
             <div id="setWorkspace" class="set-rows"><div class="set-note">Loading…</div></div>
+          </section>
+          <section id="setPane-security" class="settings-pane">
+            <div class="set-note" style="margin-bottom:10px;">
+              Everything here runs on this machine: device audit, the offline CVE vault and the
+              source scanner. Nothing is uploaded.
+            </div>
+      <div class="lab-container">
+        <div class="lab-panel">
+          <div class="card-label">1. Local Device Security Auditor (100% Offline)</div>
+          <button class="btn-firehose" onclick="runLaptopAudit()">🛡️ Audit My Laptop Security</button>
+          <div id="auditOutput" class="output-pre">Click "Audit My Laptop Security" to scan listening ports, firewall, admin privileges, and processes.</div>
+        </div>
+
+        <div class="lab-panel">
+          <div class="card-label">2. Offline CVE &amp; Bug Bounty Vault</div>
+          <div style="display:flex; gap:8px;">
+            <input id="cveQuery" type="text" placeholder="Search CVE / SQLi / XSS / Buffer Overflow..." style="flex:1;" />
+            <button class="btn-subtle" onclick="searchCVE()">Search</button>
+          </div>
+          <button class="btn-subtle" onclick="downloadCVE()">📥 Download CVE &amp; Security Datasets</button>
+          <div id="cveOutput" class="output-pre">Search the local SSD FTS5 Vault for vulnerability patterns &amp; fixes.</div>
+        </div>
+
+        <div class="lab-panel full">
+          <div class="card-label">3. Offline Code Vulnerability &amp; Bug Scanner (SAST)</div>
+          <textarea id="codeInput" class="code-editor" placeholder="Paste Python, JS, C/C++, or SQL code here to scan for vulnerabilities..."></textarea>
+          <div style="display:flex; gap:10px;">
+            <button class="btn-firehose" style="width:auto;" onclick="scanCode()">🔍 Scan Code for Bugs &amp; Vulnerabilities</button>
+            <button class="btn-subtle" onclick="patchCode()">🔧 Auto-Patch Code</button>
+          </div>
+          <div id="sastOutput" class="output-pre">SAST Severity Report &amp; Auto-Patch output will appear here.</div>
+        </div>
+      </div>
           </section>
         </div>
       </div>
@@ -2854,9 +2856,19 @@ HTML_UI = r"""<!DOCTYPE html>
       document.body.classList.toggle('sidebar-open', overlayOn);
     }
 
+    function toggleToolsDrawer(force) {
+      const drawer = document.getElementById('toolsDrawer');
+      const toggle = document.getElementById('toolsToggle');
+      if (!drawer) return;
+      const open = typeof force === 'boolean' ? force : drawer.classList.contains('closed');
+      drawer.classList.toggle('closed', !open);
+      if (toggle) toggle.setAttribute('aria-expanded', open ? 'true' : 'false');
+      try { localStorage.setItem('argon_tools_open', open ? '1' : '0'); } catch (e) {}
+    }
+
     function switchTab(name, btn) {
       document.querySelectorAll('.tab-view').forEach(el => el.classList.remove('active'));
-      document.querySelectorAll('.tool-nav-btn, .tool-strip-btn, .side-tool, .nav-item').forEach(el => {
+      document.querySelectorAll('.tool-nav-btn, .tool-strip-btn, .side-tool, .tools-item').forEach(el => {
         el.classList.remove('active');
         if (el.hasAttribute('aria-current')) el.removeAttribute('aria-current');
       });
@@ -2864,11 +2876,14 @@ HTML_UI = r"""<!DOCTYPE html>
       if (view) view.classList.add('active');
       const target = btn || document.querySelector(`.tool-nav-btn[data-tab="${name}"]`);
       if (target && target.classList) target.classList.add('active');
-      const stripBtn = document.querySelector(`.tool-strip-btn[data-tab="${name}"], .side-tool[data-tab="${name}"], .nav-item[data-tab="${name}"]`);
+      const stripBtn = document.querySelector(`.tool-strip-btn[data-tab="${name}"], .side-tool[data-tab="${name}"], .tools-item[data-tab="${name}"]`);
       if (stripBtn) {
         stripBtn.classList.add('active');
-        if (stripBtn.classList.contains('nav-item')) stripBtn.setAttribute('aria-current', 'page');
+        stripBtn.setAttribute('aria-current', 'page');
+        if (stripBtn.classList.contains('tools-item')) toggleToolsDrawer(true);
         try { stripBtn.scrollIntoView({ inline: 'nearest', block: 'nearest' }); } catch (e) {}
+      } else {
+        document.querySelectorAll('.tools-item.active').forEach(el => el.classList.remove('active'));
       }
       if (name === 'chat') {
         updateScrollFab();
@@ -4846,6 +4861,7 @@ print("Primes < 50:", primes)`;
       document.querySelectorAll('.settings-pane').forEach(sec => {
         sec.classList.toggle('active', sec.id === 'setPane-' + pane);
       });
+      document.querySelector('.settings-panel')?.classList.toggle('wide', pane === 'security');
     }
 
     function setRow(label, value) {
@@ -5335,6 +5351,12 @@ print("Primes < 50:", primes)`;
     renderHistory();
     sandboxUpdateLineNums();
     sandboxSetOutput('console');
+    try {
+      if (localStorage.getItem('argon_tools_open') === '0') {
+        document.getElementById('toolsDrawer')?.classList.add('closed');
+        document.getElementById('toolsToggle')?.setAttribute('aria-expanded', 'false');
+      }
+    } catch (e) {}
     if (window.innerWidth <= 820) {
       document.getElementById('sidebar')?.classList.add('collapsed');
       const openBtn = document.getElementById('openSidebarBtn');

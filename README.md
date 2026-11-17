@@ -124,13 +124,17 @@ static checks actually found.
 
 ## UI & UX
 
-- **Tools live in a bottom navigation bar** — 💬 Chat · ⌨️ IDE · 🎨 Gallery · 🖌️ Editor ·
-  🛡️ Security · ⚡ Bench · 🎬 Video · ⚙️ Settings — always visible under the content, thumb
-  reachable, 52–56 px tap targets, safe-area padding on phones, horizontal scroll on
-  narrow screens. The active tool is highlighted and marked `aria-current`.
+- **Tools live in a collapsible drawer inside the sidebar**, between the chat search and
+  the recent chats: ⌨️ Code IDE · 🎨 Gallery · 🎬 Video studio, with the open tool
+  highlighted. The drawer remembers whether you left it open. Chat, Security, the image
+  editor and the benchmark are not tool entries any more — chat is the default view, the
+  editor opens from the Gallery, and Security + Benchmark live in **⚙️ Settings**.
 - **Sidebar** keeps the conversation side: brand row → **＋ New chat** → chat search →
-  **Recent chats** → archived → **⚙️ Settings / 🧠 Models** pinned at the bottom above the
-  storage readout.
+  **Tools drawer** → **Recent chats** → archived → **⚙️ Settings / 🧠 Models** pinned at the
+  bottom above the storage readout.
+- **⚙️ Settings** has four panes: **Benchmark** (cards, all 18 checks, re-run, plus a link to
+  the full benchmark view), **Engine**, **Security** (device audit, offline CVE vault, SAST
+  scanner with auto-patch — the panel widens for it) and **Workspace**.
 - **Touch sizing, always on**: the sidebar is sized for fingers everywhere, not just on
   phones — New chat 46 px tall, search 44 px, history rows 48 px with 34 px share/archive/
   delete buttons that stay visible, Archived toggle 42 px, Settings/Models 46 px side by
