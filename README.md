@@ -155,6 +155,11 @@ static checks actually found.
   the URL; picking a result is what moves you to `/chat`.
 - **Top bar is minimal**: brand, demo chip and the offline toggle only — Models and Settings
   are not up there any more.
+- **Settings is one vertical stack**: the four sections are a compact horizontal chip strip
+  across the top (Benchmark · Engine · Security · Workspace), and everything under it runs
+  full-width down the page — benchmark cards one per row, buttons stacked, then the check
+  list; Security's three lab panels stack too. The Models window follows the same idea, with
+  each model's status pill and button dropping below its name.
 - **The bottom row never moves**: the chat list is the only thing that scrolls inside the
   rail, so the Settings/Models buttons and the offline note stay pinned at the bottom
   whatever the chat count, filter or tools-drawer state (very short windows fall back to

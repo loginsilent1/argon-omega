@@ -2296,6 +2296,53 @@ HTML_UI = r"""<!DOCTYPE html>
       .sidebar > .history-list { max-height: 40vh; }
     }
 
+    /* ---------- settings: small tab strip on top, panes stacked vertically ----------
+       The section list is a compact horizontal row of chips; everything under it is one
+       full-width vertical stack (benchmark cards, actions, checks, security panels). */
+    .settings-layout {
+      display: flex; flex-direction: column; gap: 8px;
+      min-height: 0; flex: 1 1 auto; overflow: hidden;
+    }
+    .settings-nav {
+      display: flex; flex-direction: row; align-items: center; gap: 4px;
+      flex: 0 0 auto; padding: 0 0 6px; margin: 0;
+      border-bottom: 1px solid var(--border-subtle);
+      overflow-x: auto; overflow-y: hidden;
+    }
+    .settings-nav::-webkit-scrollbar { height: 0; }
+    .settings-tab {
+      flex: 0 0 auto; text-align: center; white-space: nowrap;
+      padding: 4px 9px; border-radius: 8px; font-size: .68rem;
+    }
+    .settings-body { flex: 1 1 auto; min-height: 0; overflow-y: auto; padding-right: 2px; }
+
+    .settings-pane.active { display: flex; flex-direction: column; gap: 8px; }
+    .settings-pane .set-cards { display: flex; flex-direction: column; gap: 5px; margin: 0; }
+    .settings-pane .set-card {
+      flex-direction: row; align-items: baseline; justify-content: space-between;
+      gap: 10px; padding: 6px 10px; border-radius: 8px;
+    }
+    .settings-pane .set-card-label { font-size: .6rem; }
+    .settings-pane .set-card-value { font-size: .86rem; }
+    .settings-pane .set-actions { flex-direction: column; align-items: stretch; gap: 5px; margin: 0; }
+    .settings-pane .set-actions .btn-subtle {
+      width: 100%; justify-content: center; min-height: 32px; text-align: center;
+    }
+    .settings-pane .set-check { flex-wrap: wrap; gap: 3px 8px; }
+    .settings-pane .set-check .prompt { margin-left: 0; width: 100%; text-align: left; }
+    #setPane-security .lab-container {
+      display: flex; flex-direction: column; gap: 8px;
+      padding: 0; max-width: none; overflow: visible; margin: 0;
+    }
+    #setPane-security .lab-panel { padding: 10px; }
+    #setPane-security .output-pre { max-height: 170px; }
+    .settings-panel.wide { max-width: 780px; height: auto; }
+
+    /* models window: same stacked idea — pill and button drop below the name */
+    .models-panel .models-head { flex-wrap: wrap; }
+    .models-panel .model-row { flex-wrap: wrap; gap: 6px 10px; }
+    .models-panel .model-row .m-state { margin-left: 0; width: 100%; justify-content: space-between; }
+
     /* ---------- mobile drawer (last word: it must win over the desktop panel rules) ---------- */
     @media (max-width: 820px) {
       .sidebar {
