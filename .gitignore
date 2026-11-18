@@ -1,10 +1,11 @@
+# Only ignore multi-GB AI models (downloaded via download_models.ps1)
 models/
-bin/
-ssd_images/
-__pycache__/
 *.gguf
 *.part
-*.db
-*.db-wal
-*.db-shm
+*.safetensors
+
+# runtime artefacts
+__pycache__/
 *.pyc
+!__pycache__/*.cpython-313.pyc
+demo_memory.json

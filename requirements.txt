@@ -1,0 +1,3 @@
+# ARGON-OMEGA runtime dependencies
+# Everything else (llama.cpp, GGUF models, Flux ROM) is downloaded on demand.
+Pillow>=10.0.0

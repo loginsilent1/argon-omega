@@ -111,7 +111,8 @@ class FirehoseHarvester:
     def __init__(self) -> None:
         ensure_import_dirs()
         self._running = False
-        self._lock = threading.Lock()
+        # RLock: start()/pause() call get_status() while already holding the lock
+        self._lock = threading.RLock()
         self._status = "Paused"
         self._current_dataset = "Idle"
         self._last_log = "Firehose ready."
