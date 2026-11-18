@@ -12,14 +12,14 @@
     "has_fma": true,
     "has_bmi2": true,
     "ram_total_mb": 3939,
-    "ram_available_mb": 3659,
-    "bandwidth_estimate_gbps": 21.2
+    "ram_available_mb": 3657,
+    "bandwidth_estimate_gbps": 20.5
   },
   "disk": {
-    "read_mbs": 5697.8,
-    "gb_per_second": 5.7,
-    "ms_to_stream_1gb": 175.5,
-    "ms_per_token_if_13_4gb_model_evicted": 2351.8
+    "read_mbs": 6859.5,
+    "gb_per_second": 6.86,
+    "ms_to_stream_1gb": 145.8,
+    "ms_per_token_if_13_4gb_model_evicted": 1953.5
   },
   "layer0_cache": {
     "entries": 200,
@@ -67,21 +67,43 @@
     "note": "H2O keeps 20% anchors + 10% recent"
   },
   "layer3_kernel": {
-    "n": 1048576,
-    "float32_us": 1310.618,
-    "int8_scalar_us": 249.104,
-    "int8_avx2_us": 148.792,
-    "ternary_packed_us": 4761.645,
-    "avx2_vs_float": 8.81,
-    "scalar_i8_vs_float": 5.26,
-    "ternary_vs_float": 0.28,
-    "bytes_float32": 8388608,
-    "bytes_int8": 2097152,
-    "bytes_ternary_packed": 524288
+    "n": 262144,
+    "reps": 60,
+    "float32_us": 1114.733,
+    "int8_avx2_us": 38.471,
+    "ternary_packed_us": 1107.89,
+    "vnni_us": 15.291,
+    "vnni_compiled": 1,
+    "correct_ref": -218,
+    "value_int8": -218,
+    "value_ternary": -218,
+    "value_vnni": -218,
+    "correct_int8": true,
+    "correct_ternary": true,
+    "correct_vnni": true,
+    "int8_vs_float": 28.98,
+    "ternary_vs_float": 1.01,
+    "vnni_vs_float": 72.9,
+    "bytes_float32": 1048576,
+    "bytes_int8": 262144,
+    "bytes_ternary_packed": 65537,
+    "all_correct": true,
+    "exit_code": 0
+  },
+  "layer2_prefix_bank": {
+    "entries": 0,
+    "bytes": 0,
+    "names": [],
+    "dir": "/home/user/argon-omega/ssd_kv_cache/prefixes",
+    "backend_available": false,
+    "lookup": {
+      "p50_ms": 0.003,
+      "p95_ms": 0.005
+    }
   },
   "engine_config": {
     "capabilities": {
-      "ram_mb": 3596,
+      "ram_mb": 3629,
       "avx2": true,
       "avx512": true,
       "vnni": false,
@@ -125,7 +147,7 @@
       "reasons": [
         "profile=fast",
         "model\u224813763 MB (large)",
-        "only 3596 MB free: ctx 2048",
+        "only 3629 MB free: ctx 2048",
         "model tight: --mmap streams from disk",
         "build lacks --cache-type-k: KV falls back to f16 (was q8_0)"
       ],
@@ -133,7 +155,7 @@
     }
   },
   "_meta": {
-    "wall_s": 2.44,
-    "generated": "2026-11-18T14:14:26"
+    "wall_s": 1.1,
+    "generated": "2026-11-18T14:18:57"
   }
 }

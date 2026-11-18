@@ -205,69 +205,47 @@ def bench_kv():
 
 
 # ---------------------------------------------------------------- LAYER 3: kernel
-BITCORE_C = r'''
-#include <stdio.h>
-#include <stdint.h>
-#include <stdlib.h>
-#include <string.h>
-#include <time.h>
-#include <immintrin.h>
-static double now(void){struct timespec t;clock_gettime(CLOCK_MONOTONIC,&t);return t.tv_sec+t.tv_nsec*1e-9;}
-int main(int argc,char**argv){
-  int N = argc>1?atoi(argv[1]):262144; int REPS = argc>2?atoi(argv[2]):200;
-  float *xf=aligned_alloc(64,N*4), *wf=aligned_alloc(64,N*4);
-  int8_t *x8=aligned_alloc(64,N), *w8=aligned_alloc(64,N);
-  srand(11);
-  for(int i=0;i<N;i++){ int r=rand()%3; w8[i]= r==0?-1:(r==1?0:1); x8[i]=(int8_t)((rand()%9)-4);
-    xf[i]=(float)x8[i]; wf[i]=(float)w8[i]; }
-  /* packed ternary planes: A=nonzero, B=positive, 2 bits per weight */
-  int W=N/32; uint64_t *A=aligned_alloc(64,W*8), *B=aligned_alloc(64,W*8);
-  for(int i=0;i<N;i+=32){ uint64_t a=0,b=0;
-    for(int k=0;k<32;k++) if(w8[i+k]){ a|=1ULL<<(2*k); if(w8[i+k]>0) b|=1ULL<<(2*k); }
-    A[i/32]=a; B[i/32]=b; }
-  volatile float sf=0; volatile long long si=0, sp=0, sv=0; double t0;
-  t0=now(); for(int r=0;r<REPS;r++){ float s=0; for(int i=0;i<N;i++) s+=xf[i]*wf[i]; sf+=s; } double tf=(now()-t0)/REPS;
-  t0=now(); for(int r=0;r<REPS;r++){ long long s=0; for(int i=0;i<N;i++) s+=(long long)x8[i]*w8[i]; si+=s; } double ti=(now()-t0)/REPS;
-  /* AVX2 int8 dot: |x| * w then restore sign */
-  t0=now(); for(int r=0;r<REPS;r++){ long long s=0;
-    for(int i=0;i+32<=N;i+=32){
-      __m256i va=_mm256_loadu_si256((const __m256i*)(x8+i));
-      __m256i vb=_mm256_loadu_si256((const __m256i*)(w8+i));
-      __m256i p=_mm256_maddubs_epi16(_mm256_sign_epi8(va,va),vb);
-      __m256i q=_mm256_sign_epi8(p,va);
-      __m128i h=_mm_add_epi16(_mm256_castsi256_si128(q),_mm256_extracti128_si256(q,1));
-      short tmp[8]; _mm_storeu_si128((__m128i*)tmp,h);
-      for(int k=0;k<8;k++) s+=tmp[k];
-    } sv+=s; } double tavx=(now()-t0)/REPS;
-  /* ternary packed path: no multiply of weights at all (popcount on masked planes) */
-  t0=now(); for(int r=0;r<REPS;r++){ long long s=0;
-    for(int i=0;i<N;i++){ int bit=2*(i%32); uint64_t a=A[i/32], b=B[i/32];
-      if((a>>bit)&1){ int v=x8[i]; int m=v<0?-v:v;
-        s += ((b>>bit)&1) ? (v<0?-m:m) : (v<0?m:-m); } }
-    sp+=s; } double tp=(now()-t0)/REPS;
-  printf("{\"n\":%d,\"float32_us\":%.3f,\"int8_scalar_us\":%.3f,\"int8_avx2_us\":%.3f,\"ternary_packed_us\":%.3f,"
-         "\"avx2_vs_float\":%.2f,\"scalar_i8_vs_float\":%.2f,\"ternary_vs_float\":%.2f,"
-         "\"bytes_float32\":%d,\"bytes_int8\":%d,\"bytes_ternary_packed\":%d}\n",
-    N,tf*1e6,ti*1e6,tavx*1e6,tp*1e6, tf/tavx, tf/ti, tf/tp, N*8, N*2, W*16);
-  return 0; }
-'''
+BITCORE_DIR = os.path.join(os.path.dirname(os.path.abspath(__file__)), "bitcore")
 
 
 def bench_kernel(quick=False):
-    src = os.path.join(tempfile.gettempdir(), "bench_bitcore.c")
-    exe = os.path.join(tempfile.gettempdir(), "bench_bitcore")
-    open(src, "w").write(BITCORE_C)
-    flags = ["-O3", "-march=native", "-Wno-alloc-size-larger-than"]
-    r = subprocess.run(["gcc", *flags, "-o", exe, src], capture_output=True, text=True)
+    """Build and run engine_x/bitcore/bitcore: every kernel is value-checked before timed."""
+    src = os.path.join(BITCORE_DIR, "bitcore.c")
+    exe = os.path.join(BITCORE_DIR, "bitcore")
+    if not os.path.exists(src):
+        rec("layer3_kernel", error="bitcore.c missing")
+        return
+    r = subprocess.run(["gcc", "-O3", "-march=native", "-Wno-alloc-size-larger-than",
+                        "-o", exe, src], capture_output=True, text=True)
     if r.returncode != 0:
         rec("layer3_kernel", error="gcc failed", stderr=r.stderr[-400:])
         return
     out = subprocess.run([exe, "262144" if quick else "1048576", "60" if quick else "200"],
                          capture_output=True, text=True)
     try:
-        rec("layer3_kernel", **json.loads(out.stdout.strip().splitlines()[-1]))
+        data = json.loads(out.stdout.strip().splitlines()[-1])
     except Exception:
         rec("layer3_kernel", error="parse", stdout=out.stdout[-300:])
+        return
+    data["all_correct"] = all(data.get(k) for k in
+                              ("correct_int8", "correct_ternary", "correct_vnni"))
+    data["exit_code"] = out.returncode
+    rec("layer3_kernel", **data)
+
+
+def bench_prefix_bank():
+    """Prefix bank stats + a warm lookup measurement (no model needed)."""
+    sys.path.insert(0, ROOT)
+    from engine_x.prefix_bank import PrefixBank, SlotBackend
+    bank = PrefixBank()
+    rec("layer2_prefix_bank", **bank.stats(), backend_available=SlotBackend().available())
+    # measure the index lookup itself, which is what a warm session pays
+    text = "You are a Python 3.12 coding assistant. Output only runnable code."
+    kv = os.path.join(bank.dir, "_bench.kv")
+    open(kv, "wb").write(b"\0" * 4096)
+    bank.put("_bench", text, kv, 20)
+    rec("layer2_prefix_bank", lookup=timed(lambda: bank.get("_bench", text)))
+    bank.invalidate("_bench")
 
 
 # ---------------------------------------------------------------- engine config
@@ -290,7 +268,7 @@ def main():
         out = sys.argv[sys.argv.index("--json") + 1]
     t0 = time.perf_counter()
     for fn in (bench_hardware, bench_disk, bench_cache, bench_drafting, bench_kv,
-               lambda: bench_kernel(quick), bench_engine_config):
+               lambda: bench_kernel(quick), bench_prefix_bank, bench_engine_config):
         name = getattr(fn, "__name__", "kernel")
         try:
             fn()

@@ -50,3 +50,48 @@ gcc -O2 -pthread -o engine_x/flashmap engine_x/flashmap.c            # FlashMap 
 2. **FlashMap's `DONTNEED` hurts when the file fits in RAM** (measured 0.16× — a 6× regression).
    It is now gated on `file_size > 0.6 × MemAvailable`, and sub-8 MB chunks are read serially
    because thread spawn costs more than the read.
+
+---
+
+## Step 1 — prefix bank (`prefix_bank.py`)
+
+Frozen KV prefixes live on ROM, keyed by **name + hash of the exact prefix text**:
+
+```python
+bank = PrefixBank()                       # ssd_kv_cache/prefixes/index.json
+bank.put("python", SYSTEM_PROMPT, "python.kv", tokens=41)
+bank.get("python", SYSTEM_PROMPT)         # hit
+bank.get("python", SYSTEM_PROMPT + " v2") # None — edited prompt never serves stale KV
+bank.prune(2 << 30)                       # LRU eviction to a byte budget
+```
+
+`SlotBackend` wraps llama-server's `/slots/0?action=save|restore`. **When no server is
+running it returns `False` — never raises** — so the whole module is testable offline and
+the app can call it unconditionally.
+
+Verified by 7 tests: put/hit, edited-prefix miss, missing-file miss, reload from disk, LRU
+prune, absent-backend no-op, and clean `False` from save/restore without a server.
+
+## Step 4 — BitCore kernels (`bitcore/bitcore.c`)
+
+Four paths, **all value-checked against a scalar reference before being timed**; a kernel
+that returns a wrong value reports `correct_*: false` and its speedup is withheld.
+
+| kernel | measured | correct |
+|---|---|---|
+| float32 (baseline) | 1,076 µs per 262k-element dot | — |
+| `int8_avx2` (vpmaddubsw + vpsignb) | 38 µs → **28.3×** | ✅ |
+| `vnni` (`vpdpbusd`, AVX512-VNNI) | 15.7 µs → **68.5×** | ✅ |
+| ternary packed | 1,104 µs → **0.97×** | ✅ |
+
+### Three kernel attempts, kept in the source as a warning
+
+1. **mask + popcount** — correct only for *ternary activations*; for int8 it is wrong, and
+   0.28× even when right.
+2. **2-bit unpack per element** — correct, but 3.5× slower than float.
+3. **pshufb plane expansion** — fast, but the byte-plane interleave was wrong (unpack*_epi8
+   is per-128-bit-lane, and the order must be element order, not plane order).
+
+Conclusion: **the honest, verified win is int8 (28×) and VNNI (68×) — not ternary.** The
+ternary value is 4× smaller weights in RAM/disk, not speed. Fixing the pshufb interleave is
+worth a separate, benchmarked PR with cross-checks on every lane boundary.

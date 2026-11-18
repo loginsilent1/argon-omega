@@ -3,3 +3,13 @@ models/
 *.gguf
 *.part
 *.safetensors
+
+# python bytecode
+__pycache__/
+*.pyc
+
+# compiled kernels (build with gcc, see engine_x/bitcore/bitcore.c)
+engine_x/bitcore/bitcore
+
+# frozen KV prefixes are per-machine state, not source
+ssd_kv_cache/
