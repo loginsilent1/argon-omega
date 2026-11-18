@@ -12,14 +12,14 @@
     "has_fma": true,
     "has_bmi2": true,
     "ram_total_mb": 3939,
-    "ram_available_mb": 3657,
-    "bandwidth_estimate_gbps": 20.5
+    "ram_available_mb": 3652,
+    "bandwidth_estimate_gbps": 19.9
   },
   "disk": {
-    "read_mbs": 6859.5,
-    "gb_per_second": 6.86,
-    "ms_to_stream_1gb": 145.8,
-    "ms_per_token_if_13_4gb_model_evicted": 1953.5
+    "read_mbs": 5800.0,
+    "gb_per_second": 5.8,
+    "ms_to_stream_1gb": 172.4,
+    "ms_per_token_if_13_4gb_model_evicted": 2310.4
   },
   "layer0_cache": {
     "entries": 200,
@@ -69,10 +69,10 @@
   "layer3_kernel": {
     "n": 262144,
     "reps": 60,
-    "float32_us": 1114.733,
-    "int8_avx2_us": 38.471,
-    "ternary_packed_us": 1107.89,
-    "vnni_us": 15.291,
+    "float32_us": 1088.034,
+    "int8_avx2_us": 38.381,
+    "ternary_packed_us": 1131.522,
+    "vnni_us": 14.856,
     "vnni_compiled": 1,
     "correct_ref": -218,
     "value_int8": -218,
@@ -81,14 +81,108 @@
     "correct_int8": true,
     "correct_ternary": true,
     "correct_vnni": true,
-    "int8_vs_float": 28.98,
-    "ternary_vs_float": 1.01,
-    "vnni_vs_float": 72.9,
+    "int8_vs_float": 28.35,
+    "ternary_vs_float": 0.96,
+    "vnni_vs_float": 73.24,
     "bytes_float32": 1048576,
     "bytes_int8": 262144,
     "bytes_ternary_packed": 65537,
     "all_correct": true,
     "exit_code": 0
+  },
+  "layer0_templates": {
+    "tokenizer": "regex:lossless",
+    "templates": 7,
+    "per_template": {
+      "python-retry-decorator": {
+        "request": "add a retry decorator for fetch_user with 3 attempts",
+        "tokens_planned": 215,
+        "tokens_reference_answer": 761,
+        "ratio": 3.54,
+        "holes": [],
+        "match_ms": 0.382
+      },
+      "add-test": {
+        "request": "write tests for parse_config",
+        "tokens_planned": 111,
+        "tokens_reference_answer": 599,
+        "ratio": 5.4,
+        "holes": [
+          "module"
+        ],
+        "match_ms": 0.306
+      },
+      "explain-error": {
+        "request": "why does this traceback: KeyError: 'name'",
+        "tokens_planned": 108,
+        "tokens_reference_answer": 534,
+        "ratio": 4.94,
+        "holes": [
+          "file"
+        ],
+        "match_ms": 0.2911
+      },
+      "refactor-rename": {
+        "request": "rename `foo` to `bar`",
+        "tokens_planned": 81,
+        "tokens_reference_answer": 460,
+        "ratio": 5.68,
+        "holes": [],
+        "match_ms": 0.476
+      },
+      "json-to-python": {
+        "request": "convert json to python dataclass class User",
+        "tokens_planned": 133,
+        "tokens_reference_answer": null,
+        "ratio": null,
+        "holes": [],
+        "match_ms": 0.1912
+      },
+      "sql-query": {
+        "request": "select rows from orders where created_at is recent",
+        "tokens_planned": 73,
+        "tokens_reference_answer": null,
+        "ratio": null,
+        "holes": [],
+        "match_ms": 0.1724
+      },
+      "git-recovery": {
+        "request": "undo last commit, I dropped a stash",
+        "tokens_planned": 110,
+        "tokens_reference_answer": null,
+        "ratio": null,
+        "holes": [
+          "commit"
+        ],
+        "match_ms": 0.0702
+      }
+    },
+    "mean_ratio": 4.89,
+    "min_ratio": 3.54,
+    "max_ratio": 5.68
+  },
+  "layer1_triemind": {
+    "held_out": "prefix_bank.py",
+    "docs": 24,
+    "train_tokens": 206726,
+    "contexts": 59202,
+    "trie_edges": 3983482,
+    "k": 3,
+    "cap": 16,
+    "max_continuation": 24,
+    "positions": 98,
+    "mean_drafted": 1.24,
+    "mean_accepted": 0.86,
+    "acceptance_pct": 68.9,
+    "tokens_per_pass": 1.86,
+    "speedup": 1.86,
+    "lookup_ms_per_draft": 0.0138,
+    "stop_reasons": {
+      "branch": 60,
+      "no_context": 31,
+      "low_support": 3,
+      "cap": 4
+    }
   },
   "layer2_prefix_bank": {
     "entries": 0,
@@ -103,7 +197,7 @@
   },
   "engine_config": {
     "capabilities": {
-      "ram_mb": 3629,
+      "ram_mb": 3576,
       "avx2": true,
       "avx512": true,
       "vnni": false,
@@ -147,7 +241,7 @@
       "reasons": [
         "profile=fast",
         "model\u224813763 MB (large)",
-        "only 3629 MB free: ctx 2048",
+        "only 3576 MB free: ctx 2048",
         "model tight: --mmap streams from disk",
         "build lacks --cache-type-k: KV falls back to f16 (was q8_0)"
       ],
@@ -155,7 +249,7 @@
     }
   },
   "_meta": {
-    "wall_s": 1.1,
-    "generated": "2026-11-18T14:18:57"
+    "wall_s": 9.1,
+    "generated": "2026-11-18T14:26:45"
   }
 }

@@ -13,3 +13,7 @@ engine_x/bitcore/bitcore
 
 # frozen KV prefixes are per-machine state, not source
 ssd_kv_cache/
+
+# patcher backups
+*.bak
+engine_probe.py

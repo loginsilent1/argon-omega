@@ -95,3 +95,97 @@ that returns a wrong value reports `correct_*: false` and its speedup is withhel
 Conclusion: **the honest, verified win is int8 (28×) and VNNI (68×) — not ternary.** The
 ternary value is 4× smaller weights in RAM/disk, not speed. Fixing the pshufb interleave is
 worth a separate, benchmarked PR with cross-checks on every lane boundary.
+
+---
+
+## Step 3 — `templates.py`: plan-then-emit (the real 10x lever)
+
+An exact-match cache dies the moment a variable name changes, and teaches the model
+nothing. A **plan** survives: store the skeleton, let the model fill the slots.
+
+```
+"add a retry decorator for fetch_user with 3 attempts"
+  -> template python-retry-decorator, slots {target: fetch_user, attempts: 3}
+  -> 215-token plan instead of a 761-token written-out answer
+```
+
+Measured with the same tokenizer on both sides (see `bench_all.layer0_templates`):
+
+| template | full answer | plan | ratio | slots left open |
+|---|---|---|---|---|
+| python-retry-decorator | 761 tok | 215 | **3.54×** | — |
+| refactor-rename | 460 | 81 | **5.68×** | — |
+| add-test | 599 | 111 | **5.40×** | `module` |
+| explain-error | 534 | 108 | **4.94×** | `file` |
+| json-to-python / sql-query / git-recovery | — | 73–133 | — | — |
+
+**Mean 4.9×, range 3.5–5.7×** on the four templates whose reference answers are written
+out in `template_refs.py`. That is the honest version of "800 → ~60": the measured factor
+is ~5×, and it only applies to requests that match a template.
+
+Two rules keep it from lying to the user:
+1. **A required slot that cannot be extracted means no match.** "what is a retry loop"
+   does not match the retry template — we refuse rather than invent a function name.
+2. **Unfilled slots stay visible as `{module}`, `{file}`.** A guessed identifier is a silent
+   wrong answer; a visible hole is one token the model must supply. `plan["holes"]` lists
+   them.
+
+The savings are *arithmetic*, not wall-clock: the model still runs, it just emits a
+215-token plan instead of a 761-token essay. At 2 tok/s that is 6.3 min → 1.8 min.
+
+## Step 2 — `triemind.py`: radix drafter + speculative session
+
+A compressed trie over token n-grams from the local corpus. `draft()` walks it and
+**stops at any branch without clear support** — a wrong draft costs a full model pass,
+so guessing is worse than nothing.
+
+Held out: trained on 24 files / 206,726 tokens, scored on `prefix_bank.py` (never seen):
+
+| metric | value |
+|---|---|
+| mean drafted | 1.24 tokens |
+| mean accepted | 0.86 tokens |
+| acceptance | **68.9%** |
+| **tokens per model pass** | **1.86×** |
+| draft lookup cost | 0.0138 ms (0.3% of a 4 ms pass) |
+| stop reasons | branch 60, no-context 31, low-support 3, cap 4 |
+
+A confidence sweep (k=2–4, threshold 0.5–0.9) tops out at **1.71×**; the earlier 1.4×
+figure from the naive n-gram bench was in the same range. **The drafter is worth ~1.8×, not
+10×, and it is worth less on prose the corpus has never seen.** It does not stack
+multiplicatively with the kernel win — both act on the same decode loop.
+
+## Step 5 — `apply_to_engine.py`: idempotent patch
+
+```
+python3 engine_x/apply_to_engine.py            # dry-run, prints the diff
+python3 engine_x/apply_to_engine.py --check     # exit 1 if anything is unapplied
+python3 engine_x/apply_to_engine.py --write     # apply (keeps engine.py.bak)
+```
+
+Three sentinel-marked patches: the `engine_x` import block, `_engine_x_plan_emit()`
+(gated on `ARGON_PLAN_EMIT=1`, returns `source: "template"` so a template answer can never
+be mistaken for a model answer), and `_engine_x_kv_flags()` (emits `--cache-type-k` only
+if `llama-server --help` advertises it — a wrong flag makes the server exit and the
+existing fallback ladder would relaunch without it anyway).
+
+Guarantees, all tested (5 tests): dry-run never writes; a second `--write` is a no-op;
+a missing or ambiguous anchor aborts **with the file untouched**; the patched file is
+`ast.parse`d before it is written. Verified live: `import engine_probe` loads the bank,
+returns `template: python-retry-decorator, tokens: 215, holes: []` with the flag on and
+`None` with it off.
+
+## Where the multipliers really are
+
+| lever | measured | stacks with | honest note |
+|---|---|---|---|
+| Layer-0 templates | **4.9×** fewer output tokens | everything (removes work) | only for matching requests |
+| prefix-KV bank | prefill skipped, 0.003 ms lookup | everything | needs a real `llama-server` |
+| TrieMind drafter | **1.86×** | shares the decode loop | dies on unseen prose |
+| BitCore int8/VNNI | 28×/68× vs float | same arithmetic llama.cpp already does | density win, not new speed |
+| FlashMap | 1.1–1.55× disk read | only on cold I/O | a wash when page-cached |
+
+You cannot multiply 4.9 × 1.86 × 28 and call it 255×. The templates cut output tokens,
+the drafter cuts passes, the kernel cuts time per pass — that composition is roughly
+`4.9 ×` output-length reduction with `~1.4–1.8×` fewer passes on top, i.e. **a 6–9×
+end-to-end improvement for template-matching tasks and ~1.8× for everything else.**

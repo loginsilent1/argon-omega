@@ -129,6 +129,161 @@ class TestKernel(unittest.TestCase):
         self.assertLess(k["ternary_vs_float"], 2.0)
 
 
+class TestApplyToEngine(unittest.TestCase):
+    """The patcher must be safe to run blindly: dry-run, idempotent, all-or-nothing."""
+
+    def setUp(self):
+        import shutil, tempfile
+        from engine_x import apply_to_engine
+        self.mod = apply_to_engine
+        self.tmp = tempfile.mkdtemp()
+        self.target = os.path.join(self.tmp, "engine.py")
+        shutil.copyfile(apply_to_engine.TARGET, self.target)
+
+    def _read(self):
+        return open(self.target, encoding="utf-8").read()
+
+    def test_dry_run_never_writes(self):
+        before = self._read()
+        rc = self.mod.main(["--target", self.target])
+        self.assertEqual(rc, 0)
+        self.assertEqual(self._read(), before)
+
+    def test_check_reports_unapplied_then_applied(self):
+        self.assertEqual(self.mod.main(["--target", self.target, "--check"]), 1)
+        self.mod.main(["--target", self.target, "--write"])
+        self.assertEqual(self.mod.main(["--target", self.target, "--check"]), 0)
+
+    def test_second_run_is_a_noop(self):
+        self.mod.main(["--target", self.target, "--write"])
+        once = self._read()
+        self.assertEqual(self.mod.main(["--target", self.target, "--write"]), 0)
+        self.assertEqual(self._read(), once, "patching twice modified the file again")
+
+    def test_patched_file_still_compiles(self):
+        import ast
+        self.mod.main(["--target", self.target, "--write"])
+        ast.parse(self._read())
+        self.assertIn("def _engine_x_plan_emit", self._read())
+        self.assertIn("def _engine_x_kv_flags", self._read())
+
+    def test_missing_anchor_aborts_and_leaves_file_untouched(self):
+        broken = self._read().replace("def ensure_llama_server(", "def ensure_llama_server_RENAMED(", 1)
+        open(self.target, "w", encoding="utf-8").write(broken)
+        rc = self.mod.main(["--target", self.target, "--write"])
+        self.assertEqual(rc, 2)
+        self.assertEqual(self._read(), broken)
+        self.assertNotIn("# [engine_x:1]", self._read())
+
+
+class TestTrieMind(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from engine_x.triemind import RadixDrafter
+        cls.d = RadixDrafter(k=3, min_confidence=0.5)
+        cls.d.add_text("def foo(x):\n    return x + 1\n\ndef bar(y):\n    return y * 2\n")
+        cls.d.add_text("def foo(x):\n    return x + 1\n\ndef bar(y):\n    return y * 2\n")
+
+    def test_tokenizer_is_lossless(self):
+        from engine_x.triemind import tokenize
+        for s in ("def f(x):\n    return x+1\n", "a  b\tc\n", "x = {'k': [1,2]}"):
+            self.assertEqual("".join(tokenize(s)), s)
+
+    def test_draft_extends_context(self):
+        from engine_x.triemind import tokenize
+        ctx = tokenize("def foo(x):\n    return ")
+        d = self.d.draft(ctx)
+        self.assertGreaterEqual(len(d), 1)
+        self.assertEqual(d.tokens[0], "x")
+        self.assertIsInstance(d.lookup_ms, float)
+
+    def test_unknown_context_drafts_nothing(self):
+        from engine_x.triemind import tokenize
+        d = self.d.draft(tokenize("zzz qqq vvv "))
+        self.assertEqual(len(d), 0)
+        self.assertEqual(d.stopped_at, "no_context")
+
+    def test_ambiguous_branch_stops_instead_of_guessing(self):
+        from engine_x.triemind import RadixDrafter, tokenize
+        d = RadixDrafter(k=1, min_confidence=0.9)
+        for line in ("a X", "a Y", "a Z"):
+            d.add_text(line + "\n")
+        draft = d.draft(tokenize("a"))
+        # the shared whitespace after "a" is safe to draft; the X/Y/Z choice is not
+        self.assertEqual(draft.stopped_at, "branch")
+        self.assertNotIn("X", draft.tokens)
+        self.assertNotIn("Y", draft.tokens)
+
+    def test_accept_counts_the_matching_prefix_only(self):
+        from engine_x.triemind import RadixDrafter, Draft
+        dr = Draft(["a", "b", "c"], 1.0, "cap")
+        self.assertEqual(RadixDrafter.accept(dr, ["a", "b", "X"]), 2)
+        self.assertEqual(RadixDrafter.accept(dr, ["X", "b"]), 0)
+        self.assertEqual(RadixDrafter.accept(dr, ["a", "b", "c", "d"]), 3)
+
+    def test_session_pays_one_pass_per_emitted_group(self):
+        from engine_x.triemind import RadixDrafter, SpeculativeSession, tokenize
+        truth = tokenize("def foo(x):\n    return x + 1\n")
+        def model(ctx, n):
+            i = len(ctx) - 6                    # context started at token 6
+            return truth[max(0, i):max(0, i) + n]
+        sess = SpeculativeSession(model, self.d, max_new=12)
+        r = sess.run(truth[0:6])
+        self.assertGreater(r["tokens"], 0)
+        self.assertGreaterEqual(r["tokens_per_pass"], 1.0)
+        self.assertLessEqual(r["passes"], r["tokens"])   # never more passes than tokens
+
+    def test_evaluate_reports_tokens_per_pass_not_a_wish(self):
+        from engine_x.triemind import evaluate, tokenize
+        ref = tokenize("def foo(x):\n    return x + 1\n\n")
+        r = evaluate(self.d, ref)
+        self.assertIn("tokens_per_pass", r)
+        self.assertGreaterEqual(r["tokens_per_pass"], 1.0)
+        self.assertEqual(r["tokens_per_pass"], round(1 + r["mean_accepted"], 2))
+
+
+class TestTemplates(unittest.TestCase):
+    @classmethod
+    def setUpClass(cls):
+        from engine_x.templates import TemplateBank
+        cls.bank = TemplateBank()
+
+    def test_every_template_matches_its_own_request(self):
+        from engine_x.templates import TEMPLATES
+        self.assertTrue(len(TEMPLATES) >= 6)
+        report = self.bank.verify([
+            ("add a retry decorator for fetch_user with 3 attempts", "python-retry-decorator"),
+            ("write tests for parse_config", "add-test"),
+            ("why does this traceback: KeyError", "explain-error"),
+            ("rename `foo` to `bar`", "refactor-rename"),
+            ("convert json to python dataclass class User", "json-to-python"),
+            ("select all rows from orders", "sql-query"),
+            ("undo last commit, I dropped a stash", "git-recovery"),
+        ])
+        self.assertTrue(report["ok"], report["failures"])
+
+    def test_required_slot_missing_means_no_match(self):
+        # "retry" with nothing to retry: refuse rather than invent a target
+        self.assertFalse(self.bank.plan("what is a retry loop in general")["hit"])
+
+    def test_render_never_invents_a_slot(self):
+        p = self.bank.plan("write tests for parse_config")
+        self.assertIn("module", p["holes"])          # visible hole
+        rendered = p["plan"]
+        self.assertNotIn("target_module", rendered)  # not a fabricated module name
+        self.assertIn("from {module} import parse_config", rendered)
+
+    def test_plan_tokens_beat_a_full_answer(self):
+        from engine_x.templates import count_tokens
+        p = self.bank.plan("add a retry decorator for fetch_user with 3 attempts")
+        t = next(t for t in self.bank.templates if t.name == p["name"])
+        self.assertGreater(count_tokens(t.reference_answer), 3 * p["tokens_planned"])
+
+    def test_matching_is_fast(self):
+        p = self.bank.plan("add a retry decorator for fetch_user with 3 attempts")
+        self.assertLess(p["match_ms"], 5.0)
+
+
 class TestPrefixBank(unittest.TestCase):
     def setUp(self):
         import tempfile

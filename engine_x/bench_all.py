@@ -233,6 +233,58 @@ def bench_kernel(quick=False):
     rec("layer3_kernel", **data)
 
 
+def bench_templates():
+    """Layer 0: plan-then-emit. Tokens are tokenized, both sides, same tokenizer."""
+    sys.path.insert(0, ROOT)
+    from engine_x.templates import TemplateBank, TOKENIZER, count_tokens
+    bank = TemplateBank()
+    rows = {}
+    for t in bank.templates:
+        request = {"python-retry-decorator": "add a retry decorator for fetch_user with 3 attempts",
+                   "add-test": "write tests for parse_config",
+                   "explain-error": "why does this traceback: KeyError: 'name'",
+                   "refactor-rename": "rename `foo` to `bar`",
+                   "json-to-python": "convert json to python dataclass class User",
+                   "sql-query": "select rows from orders where created_at is recent",
+                   "git-recovery": "undo last commit, I dropped a stash"}.get(t.name, t.name)
+        plan = bank.plan(request)
+        if not plan["hit"]:
+            rows[t.name] = {"error": "no match"}
+            continue
+        ref = count_tokens(t.reference_answer) if t.reference_answer else None
+        rows[t.name] = {
+            "request": request,
+            "tokens_planned": plan["tokens_planned"],
+            "tokens_reference_answer": ref,
+            "ratio": round(ref / plan["tokens_planned"], 2) if ref else None,
+            "holes": plan["holes"],
+            "match_ms": plan["match_ms"],
+        }
+    ratios = [r["ratio"] for r in rows.values() if r.get("ratio")]
+    rec("layer0_templates", tokenizer=TOKENIZER, templates=len(rows), per_template=rows,
+        mean_ratio=round(statistics.mean(ratios), 2) if ratios else None,
+        min_ratio=min(ratios) if ratios else None, max_ratio=max(ratios) if ratios else None)
+
+
+def bench_triemind(quick=True):
+    """Layer 1: radix drafter, scored on a held-out file it was not trained on."""
+    sys.path.insert(0, ROOT)
+    from engine_x.triemind import RadixDrafter, evaluate, tokenize
+    held_out = os.path.join(ROOT, "engine_x", "prefix_bank.py")
+    import glob
+    files = [f for f in glob.glob(os.path.join(ROOT, "*.py")) + glob.glob(os.path.join(ROOT, "engine_x", "*.py"))
+             if os.path.basename(f) not in ("prefix_bank.py", "triemind.py")]
+    d = RadixDrafter(k=3, min_confidence=0.6, max_continuation=24)
+    for f in files:
+        try:
+            d.add_text(open(f, encoding="utf-8", errors="replace").read())
+        except OSError:
+            continue
+    ref = tokenize(open(held_out, encoding="utf-8", errors="replace").read())
+    r = evaluate(d, ref, stride=25 if quick else 5)
+    rec("layer1_triemind", held_out=os.path.basename(held_out), **d.stats(), **r)
+
+
 def bench_prefix_bank():
     """Prefix bank stats + a warm lookup measurement (no model needed)."""
     sys.path.insert(0, ROOT)
@@ -268,7 +320,8 @@ def main():
         out = sys.argv[sys.argv.index("--json") + 1]
     t0 = time.perf_counter()
     for fn in (bench_hardware, bench_disk, bench_cache, bench_drafting, bench_kv,
-               lambda: bench_kernel(quick), bench_prefix_bank, bench_engine_config):
+               lambda: bench_kernel(quick), bench_templates, lambda: bench_triemind(quick), bench_prefix_bank,
+               bench_engine_config):
         name = getattr(fn, "__name__", "kernel")
         try:
             fn()
