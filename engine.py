@@ -926,7 +926,9 @@ def verify_elite_model_urls() -> dict:
     return results
 
 
-def start_elite_model_download() -> dict:
+def start_elite_model_download(only: list[str] | None = None) -> dict:
+    """Download elite brains; pass filenames in `only` to fetch a subset."""
+    wanted = {name for name in (only or []) if name in ELITE_BRAINS} or set(ELITE_BRAINS)
     already_running = False
     with _DOWNLOAD_LOCK:
         if _DOWNLOAD_STATE["running"]:
@@ -939,6 +941,8 @@ def start_elite_model_download() -> dict:
     def worker() -> None:
         try:
             for filename, url in ELITE_BRAINS.items():
+                if filename not in wanted:
+                    continue
                 with _DOWNLOAD_LOCK:
                     if _DOWNLOAD_STATE["models"][filename]["status"] == "ready":
                         continue
@@ -1252,12 +1256,39 @@ def generate_direct(system_prompt: str, user_prompt: str, max_tokens: int = 512,
         return f"llama-server.exe error: {exc}", model_name
 
 
+def _demo_module():
+    """Import the simulated demo brain lazily; never fatal if it is missing."""
+    try:
+        import demo_brain
+        return demo_brain
+    except Exception:
+        return None
+
+
+def _demo_answer(prompt: str, kwargs: dict) -> dict | None:
+    """Fallback completion from the simulated brain when no GGUF is installed."""
+    demo = _demo_module()
+    if demo is None or not demo.enabled():
+        return None
+    try:
+        return demo.generate(
+            prompt,
+            language=str(kwargs.get("language", "auto")),
+            thinking_level=str(kwargs.get("thinking_level", "mid")),
+        )
+    except Exception:
+        return None
+
+
 def answer_query(prompt: str, force_offline: bool = True, model: str = "auto", swarm_enabled: bool = True, **kwargs) -> dict:
     """Route prompt via select_best_model_for_prompt() and run_5gear_brain()."""
     req_model = model if (model and model != "auto") else _SELECTED_MODE
     chosen_mode, chosen_gguf, model_badge = select_best_model_for_prompt(prompt, requested_model=req_model)
     ok, loaded_model = ensure_model_loaded(chosen_gguf)
     if not ok or not loaded_model:
+        demo = _demo_answer(prompt, kwargs)
+        if demo is not None:
+            return demo
         return {
             "reply": f"The offline primary model `{CODER_FAST_BRAIN}` is not installed in models/, or llama-server.exe could not start. Download that GGUF and retry.",
             "latency_ms": 0,
@@ -1295,11 +1326,15 @@ def answer_query(prompt: str, force_offline: bool = True, model: str = "auto", s
     }
 
 
-def stream_chat(user_prompt: str):
+def stream_chat(user_prompt: str, language: str = "auto", thinking_level: str = "mid"):
     req_model = _SELECTED_MODE if _SELECTED_MODE != "auto" else "auto"
     _, chosen_gguf, _ = select_best_model_for_prompt(user_prompt, requested_model=req_model)
     ok, loaded_model = ensure_model_loaded(chosen_gguf)
     if not ok or not loaded_model:
+        demo = _demo_module()
+        if demo is not None and demo.enabled():
+            yield from demo.stream(user_prompt, language=language, thinking_level=thinking_level)
+            return
         message = f"No supported text brain is installed or llama-server.exe could not start. Requested: {chosen_gguf}"
         yield {"type": "token", "token": message}
         yield {"type": "done", "reply": message, "ttft_ms": 0, "total_ms": 0, "tok_per_sec": 0.0, "badge": "Model unavailable"}
@@ -1308,4 +1343,8 @@ def stream_chat(user_prompt: str):
 
 
 def stream_query(prompt: str, **kwargs):
-    yield from stream_chat(prompt)
+    yield from stream_chat(
+        prompt,
+        language=str(kwargs.get("language", "auto")),
+        thinking_level=str(kwargs.get("thinking_level", "mid")),
+    )

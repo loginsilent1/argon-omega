@@ -286,15 +286,57 @@ def _generate_offline_svg(prompt: str) -> str:
 </svg>"""
 
 
+def _offline_canvas_fallback(prompt: str, style: str = "Realistic HD") -> dict:
+    """Procedural fallback renderer: always produces a unique image with no weights.
+
+    Keeps the Image Studio usable when neither FLUX nor Stable Diffusion binaries
+    or GGUF/Safetensors weights are installed ("demo" mode).
+    """
+    global LAST_GENERATED_IMAGE
+    t0 = time.perf_counter()
+    os.makedirs(SSD_IMAGES_DIR, exist_ok=True)
+    clean_prompt = re.sub(
+        r'^(generate|create|draw|make|paint|render|show|design)\s+(an?\s+)?(new\s+)?(hd\s+|4k\s+|realistic\s+)?(image|picture|photo|art|wallpaper|logo|drawing|illustration|poster)\s+(of\s+|about\s+|for\s+)?',
+        '', prompt.strip(), flags=re.I,
+    ).strip() or prompt.strip()
+    seed = _sys_rng.randint(100000, 999999999)
+    ts_ms = int(time.time() * 1000)
+    slug = re.sub(r'[^a-zA-Z0-9]+', '_', clean_prompt.lower()).strip('_')[:28] or "gen"
+    filename = f"{slug}_{ts_ms}_{seed}.png"
+    out_path = os.path.join(SSD_IMAGES_DIR, filename)
+    _synthesize_unique_offline_canvas(clean_prompt, seed, out_path)
+    if not os.path.exists(out_path) or os.path.getsize(out_path) == 0:
+        return {
+            "prompt": clean_prompt, "filename": "", "url": "",
+            "mode": "Procedural renderer produced no output", "cached": False, "latency_ms": 0.0,
+        }
+    LAST_GENERATED_IMAGE = out_path
+    _save_image_record(clean_prompt, clean_prompt.lower(), filename, "Offline Procedural Synth (no weights)")
+    return {
+        "prompt": clean_prompt,
+        "filename": filename,
+        "url": f"/ssd_images/{filename}?t={ts_ms}",
+        "mode": f"Offline Procedural Synth (seed #{seed}, no model weights present)",
+        "cached": False,
+        "latency_ms": round((time.perf_counter() - t0) * 1000, 1),
+        "seed": seed,
+    }
+
+
 def generate_image(prompt: str, force_offline: bool = False) -> dict:
     """Route /api/image through generate_image_hybrid (uses models/sd_turbo.safetensors + bin/sd/sd.exe)."""
     res = generate_image_hybrid(prompt)
     if not res.get("ok"):
+        # No FLUX / SD weights or binaries available: render procedurally instead
+        # of failing the request, so the studio still works offline.
+        fallback = _offline_canvas_fallback(prompt)
+        if fallback.get("url"):
+            return fallback
         return {
             "prompt": prompt,
             "filename": "",
             "url": "",
-            "mode": res.get("error", "Error"),
+            "mode": res.get("error", fallback.get("mode", "Error")),
             "cached": False,
             "latency_ms": 0.0,
         }
@@ -518,8 +560,18 @@ def generate_image_hybrid(prompt: str, style: str = "Realistic HD", width: int =
     t0 = time.perf_counter()
     os.makedirs(SSD_IMAGES_DIR, exist_ok=True)
 
-    if not check_ssd_space_guard(45.0):
-        return {"ok": False, "error": "SSD Safety Guard: Less than 45GB free space remaining on SSD."}
+    # 45 GB is the *advisory* target; refuse only when the disk genuinely
+    # cannot fit a render. Blocking everything below 45 GB made the image
+    # studio unusable on ordinary laptops while protecting nothing.
+    if not check_ssd_space_guard(1.5):
+        _, _, free_bytes = shutil.disk_usage(BASE_DIR)
+        return {
+            "ok": False,
+            "error": (
+                "Not enough free disk space to write an image "
+                f"({free_bytes / (1024 ** 3):.1f} GB free, 1.5 GB required)."
+            ),
+        }
 
     clean_prompt = re.sub(
         r'^(generate|create|draw|make|paint|render|show|design)\s+(an?\s+)?(new\s+)?(hd\s+|4k\s+|realistic\s+)?(image|picture|photo|art|wallpaper|logo|drawing|illustration|poster)\s+(of\s+|about\s+|for\s+)?',
