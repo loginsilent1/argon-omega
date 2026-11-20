@@ -26,3 +26,6 @@ engine_probe.py
 *.db-wal
 *.db-shm
 ssd_images/
+
+# Windows llama.cpp runtime (installed locally, not source)
+bin/
