@@ -9,3 +9,23 @@ __pycache__/
 *.pyc
 !__pycache__/*.cpython-313.pyc
 demo_memory.json
+
+# compiled kernels (build with gcc, see engine_x/bitcore/bitcore.c)
+engine_x/bitcore/bitcore
+engine_x/flashmap
+
+# frozen KV prefixes are per-machine state, not source
+ssd_kv_cache/
+
+# patcher backups
+*.bak
+engine_probe.py
+
+# generated state (rebuilt at runtime by database.py / rom_vault.py)
+*.db
+*.db-wal
+*.db-shm
+ssd_images/
+
+# Windows llama.cpp runtime (installed locally, not source)
+bin/

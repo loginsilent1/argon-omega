@@ -1,0 +1,348 @@
+{
+  "hardware": {
+    "platform": "Linux-6.1.158+-x86_64-with-glibc2.36",
+    "machine": "x86_64",
+    "cpu_count": 2,
+    "cpu": "Intel(R) Xeon(R) Processor @ 2.60GHz",
+    "has_avx2": true,
+    "has_avx512f": true,
+    "has_avx512vnni": false,
+    "has_avxvnni": false,
+    "has_popcnt": true,
+    "has_fma": true,
+    "has_bmi2": true,
+    "ram_total_mb": 3939,
+    "ram_available_mb": 3705,
+    "bandwidth_estimate_gbps": 18.0
+  },
+  "disk": {
+    "read_mbs": 5659.7,
+    "gb_per_second": 5.66,
+    "warm_note": "96 MB probe file: served from page cache, not disk",
+    "cold_gb_per_s": 0.627,
+    "cold_mb_per_s": 626.9,
+    "cold_range_mb_per_s": [
+      552.1,
+      629.1
+    ],
+    "warm_vs_cold_x": 9.0,
+    "ms_per_token_if_13_4gb_model_evicted": 21375.0
+  },
+  "layer0_cache": {
+    "entries": 200,
+    "hit_rate_pct": 100.0,
+    "p50_ms": 0.002,
+    "p95_ms": 0.003,
+    "note": "in-memory; SQLite variant adds ~0.2 ms"
+  },
+  "layer1_drafting": {
+    "corpus_tokens": 136711,
+    "context_k": 3,
+    "hit_rate_pct": 32.9,
+    "mean_draft": 4.26,
+    "passes_per_100_tokens": 71.2,
+    "speedup": 1.4
+  },
+  "layer2_kv": {
+    "per_token_bytes": 262144,
+    "by_context": {
+      "ctx_2048": {
+        "f16_mb": 512.0,
+        "q8_mb": 256.0,
+        "q4_mb": 128.0,
+        "q4_h2o_30pct_mb": 38.4
+      },
+      "ctx_4096": {
+        "f16_mb": 1024.0,
+        "q8_mb": 512.0,
+        "q4_mb": 256.0,
+        "q4_h2o_30pct_mb": 76.8
+      },
+      "ctx_8192": {
+        "f16_mb": 2048.0,
+        "q8_mb": 1024.0,
+        "q4_mb": 512.0,
+        "q4_h2o_30pct_mb": 153.6
+      },
+      "ctx_32768": {
+        "f16_mb": 8192.0,
+        "q8_mb": 4096.0,
+        "q4_mb": 2048.0,
+        "q4_h2o_30pct_mb": 614.4
+      }
+    },
+    "note": "H2O keeps 20% anchors + 10% recent"
+  },
+  "layer3_kernel": {
+    "n": 262144,
+    "reps": 60,
+    "float32_us": 1054.598,
+    "int8_avx2_us": 37.898,
+    "ternary_packed_us": 1105.146,
+    "vnni_us": 15.331,
+    "vnni_compiled": 1,
+    "correct_ref": -218,
+    "value_int8": -218,
+    "value_ternary": -218,
+    "value_vnni": -218,
+    "correct_int8": true,
+    "correct_ternary": true,
+    "correct_vnni": true,
+    "int8_vs_float": 27.83,
+    "ternary_vs_float": 0.95,
+    "vnni_vs_float": 68.79,
+    "bytes_float32": 1048576,
+    "bytes_int8": 262144,
+    "bytes_ternary_packed": 65537,
+    "all_correct": true,
+    "exit_code": 0
+  },
+  "layer0_templates": {
+    "tokenizer": "regex:lossless",
+    "templates": 7,
+    "per_template": {
+      "python-retry-decorator": {
+        "request": "add a retry decorator for fetch_user with 3 attempts",
+        "tokens_planned": 215,
+        "tokens_reference_answer": 761,
+        "ratio": 3.54,
+        "holes": [],
+        "match_ms": 0.3664
+      },
+      "add-test": {
+        "request": "write tests for parse_config",
+        "tokens_planned": 111,
+        "tokens_reference_answer": 599,
+        "ratio": 5.4,
+        "holes": [
+          "module"
+        ],
+        "match_ms": 0.2648
+      },
+      "explain-error": {
+        "request": "why does this traceback: KeyError: 'name'",
+        "tokens_planned": 108,
+        "tokens_reference_answer": 534,
+        "ratio": 4.94,
+        "holes": [
+          "file"
+        ],
+        "match_ms": 0.291
+      },
+      "refactor-rename": {
+        "request": "rename `foo` to `bar`",
+        "tokens_planned": 81,
+        "tokens_reference_answer": 460,
+        "ratio": 5.68,
+        "holes": [],
+        "match_ms": 0.4409
+      },
+      "json-to-python": {
+        "request": "convert json to python dataclass class User",
+        "tokens_planned": 133,
+        "tokens_reference_answer": null,
+        "ratio": null,
+        "holes": [],
+        "match_ms": 0.1931
+      },
+      "sql-query": {
+        "request": "select rows from orders where created_at is recent",
+        "tokens_planned": 73,
+        "tokens_reference_answer": null,
+        "ratio": null,
+        "holes": [],
+        "match_ms": 0.1677
+      },
+      "git-recovery": {
+        "request": "undo last commit, I dropped a stash",
+        "tokens_planned": 110,
+        "tokens_reference_answer": null,
+        "ratio": null,
+        "holes": [
+          "commit"
+        ],
+        "match_ms": 0.0707
+      }
+    },
+    "mean_ratio": 4.89,
+    "min_ratio": 3.54,
+    "max_ratio": 5.68
+  },
+  "layer1_triemind": {
+    "held_out": "prefix_bank.py",
+    "docs": 25,
+    "train_tokens": 214387,
+    "contexts": 61725,
+    "trie_edges": 4141228,
+    "k": 3,
+    "cap": 16,
+    "max_continuation": 24,
+    "positions": 98,
+    "mean_drafted": 1.23,
+    "mean_accepted": 0.85,
+    "acceptance_pct": 68.6,
+    "tokens_per_pass": 1.85,
+    "speedup": 1.85,
+    "lookup_ms_per_draft": 0.0411,
+    "stop_reasons": {
+      "branch": 60,
+      "no_context": 30,
+      "low_support": 4,
+      "cap": 4
+    }
+  },
+  "layer2_prefix_bank": {
+    "entries": 0,
+    "bytes": 0,
+    "names": [],
+    "dir": "/home/user/argon-omega/ssd_kv_cache/prefixes",
+    "backend_available": false,
+    "lookup": {
+      "p50_ms": 0.003,
+      "p95_ms": 0.104
+    }
+  },
+  "layer1_airllm": {
+    "compute_is_placeholder": true,
+    "model_mb": 205.5,
+    "tokens": 4,
+    "per_mode": {
+      "serial": {
+        "steady_ms_per_token": 179.1,
+        "first_token_ms": 197.5,
+        "vs_serial": 1.0,
+        "rss_peak_mb": 34.2,
+        "bytes_read_x_model": 4.0,
+        "load_share_pct": 22.2
+      },
+      "prefetch": {
+        "steady_ms_per_token": 150.7,
+        "first_token_ms": 167.0,
+        "vs_serial": 1.19,
+        "rss_peak_mb": 59.1,
+        "bytes_read_x_model": 4.0,
+        "load_share_pct": 35.0
+      },
+      "mmap": {
+        "steady_ms_per_token": 176.7,
+        "first_token_ms": 144.8,
+        "vs_serial": 1.01,
+        "rss_peak_mb": 203.3,
+        "bytes_read_x_model": null,
+        "load_share_pct": null
+      },
+      "compressed": {
+        "steady_ms_per_token": 84.6,
+        "first_token_ms": 92.2,
+        "vs_serial": 2.12,
+        "rss_peak_mb": 22.2,
+        "bytes_read_x_model": 2.0,
+        "load_share_pct": 20.3
+      }
+    },
+    "projections": {
+      "7gb_f16": {
+        "model_gb": 7.0,
+        "ram_gb": 4.13,
+        "fits_resident_int8": false,
+        "tok_per_s_resident_int8": 2.7,
+        "recommended_if_int8_fits": "int8 resident (quantise instead of streaming)",
+        "fits_resident": false,
+        "recommended": "stream",
+        "tok_per_s_resident": 1.35,
+        "tok_per_s_streamed": 0.099,
+        "tok_per_s_mmap": 0.09,
+        "ms_per_token_streamed": 11164.3,
+        "layer_mb": 218.8,
+        "note": "streaming only wins when the model does not fit; at equal size resident RAM bandwidth is ~5-6x this disk"
+      },
+      "13gb_f16": {
+        "model_gb": 13.0,
+        "ram_gb": 4.13,
+        "fits_resident_int8": false,
+        "tok_per_s_resident_int8": 1.45,
+        "recommended_if_int8_fits": "int8 resident (quantise instead of streaming)",
+        "fits_resident": false,
+        "recommended": "stream",
+        "tok_per_s_resident": 0.73,
+        "tok_per_s_streamed": 0.053,
+        "tok_per_s_mmap": 0.048,
+        "ms_per_token_streamed": 20733.7,
+        "layer_mb": 406.2,
+        "note": "streaming only wins when the model does not fit; at equal size resident RAM bandwidth is ~5-6x this disk"
+      },
+      "70gb_f16": {
+        "model_gb": 70.0,
+        "ram_gb": 4.13,
+        "fits_resident_int8": false,
+        "tok_per_s_resident_int8": 0.27,
+        "recommended_if_int8_fits": "int8 resident (quantise instead of streaming)",
+        "fits_resident": false,
+        "recommended": "stream",
+        "tok_per_s_resident": 0.14,
+        "tok_per_s_streamed": 0.01,
+        "tok_per_s_mmap": 0.009,
+        "ms_per_token_streamed": 111642.7,
+        "layer_mb": 2187.5,
+        "note": "streaming only wins when the model does not fit; at equal size resident RAM bandwidth is ~5-6x this disk"
+      }
+    }
+  },
+  "engine_config": {
+    "capabilities": {
+      "ram_mb": 3619,
+      "avx2": true,
+      "avx512": true,
+      "vnni": false,
+      "llama_server": null,
+      "flash_attn_flag": false,
+      "cache_type_flag": false,
+      "ngl_default": 0
+    },
+    "plan": {
+      "model": "qwen2.5-coder-32b-instruct-IQ3_XS.gguf",
+      "model_mb": 13762.6,
+      "size_class": "large",
+      "profile": "fast",
+      "context": 2048,
+      "kv_cache": "f16",
+      "flash_attn": false,
+      "mmap": true,
+      "threads": 1,
+      "ngl": 0,
+      "argv": [
+        "--host",
+        "127.0.0.1",
+        "--port",
+        "8081",
+        "--no-repack",
+        "-np",
+        "1",
+        "-c",
+        "2048",
+        "-b",
+        "2048",
+        "-ub",
+        "512",
+        "-t",
+        "1",
+        "-tb",
+        "1",
+        "--context-shift",
+        "--mmap"
+      ],
+      "reasons": [
+        "profile=fast",
+        "model\u224813763 MB (large)",
+        "only 3619 MB free: ctx 2048",
+        "model tight: --mmap streams from disk",
+        "build lacks --cache-type-k: KV falls back to f16 (was q8_0)"
+      ],
+      "trim_working_set": false
+    }
+  },
+  "_meta": {
+    "wall_s": 37.74,
+    "generated": "2026-11-20T09:03:22"
+  }
+}

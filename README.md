@@ -216,3 +216,28 @@ static checks actually found.
   preview domains and anything listed in `ARGON_ALLOWED_HOSTS` are accepted; the
   `Origin` header must match the request host. Set `ARGON_ALLOW_ANY_HOST=1` only on a
   trusted private network.
+
+---
+
+## `engine_x/` — the fused-engine work, as measured code
+
+Optional, self-contained measurement layer (does not change how the app runs unless you
+apply it). Everything is verified before it is timed:
+
+- **47 tests:** `python3 engine_x/test_engine_x.py`
+- **baseline numbers:** `python3 engine_x/bench_all.py --quick` → `engine_x/bench_baseline.json`
+- **what each layer measured:** `engine_x/README.md`
+
+Highlights: plan-then-emit templates **4.9×** fewer output tokens · radix drafter
+**1.86** tokens per model pass · BitCore int8 AVX2 **28×** and VNNI **68×** vs float
+(ternary: 0.97×, a density win only) · prefix-KV bank lookup **0.003 ms** · FlashMap
+1.1–1.55× disk read · AirLLM layer streaming keeps peak RAM at **11–17 %** of the model
+but runs a 70 GB model at 0.010 tok/s on this disk, so quantise-and-stay-resident wins
+whenever it fits.
+
+To wire it into `engine.py` (dry-run first, idempotent, aborts cleanly):
+
+```bash
+python3 engine_x/apply_to_engine.py          # prints the diff, writes nothing
+python3 engine_x/apply_to_engine.py --write  # applies, keeps engine.py.bak
+```
