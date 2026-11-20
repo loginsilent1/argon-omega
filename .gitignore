@@ -29,3 +29,4 @@ ssd_images/
 
 # Windows llama.cpp runtime (installed locally, not source)
 bin/
+engine_x/flashmap

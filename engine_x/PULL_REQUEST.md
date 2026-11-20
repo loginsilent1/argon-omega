@@ -84,9 +84,32 @@ does not fit and 1 token/minute is still useful.
   path is exercised against its no-op fallback, not a live server.
 * No Windows `.exe` can be built in this environment.
 
-## Merge note
+## Merge status
 
-This branch was cut from the grafted stub `0ecffd9`, which is **not an ancestor of
-`origin/master`** (`git merge-base HEAD origin/master` fails). The diff therefore only
-touches new files under `engine_x/` plus `.gitignore`; review it as an additive directory,
-not as a tree-wide change.
+`origin/master` was merged into this branch (`ee260ea`), so the PR is
+**MERGEABLE / CLEAN**. Final diff: **17 files, +3,639 / −0** — all new files under
+`engine_x/`, plus 45 added lines in `.gitignore` and `README.md`. Nothing is deleted or
+rewritten.
+
+Two things had to be cleaned out of the diff first, both of which were **pre-existing stub
+state, not this work**:
+
+* nine generated artefacts (`*.db` vaults, `ssd_images/`) and `download_models.ps1`;
+* `bin/` — 99 MB of Windows DLLs including `llama-server.exe`.
+
+Both are now git-ignored but left **on disk**, so a local install still works; they were
+only ever tracked because the original upload committed them. This PR does not need to
+carry a 99 MB binary payload to add a Python measurement layer.
+
+Conflict resolutions in the merge: `.gitignore` = union of both rule sets;
+`README.md` = master's document byte-for-byte plus an `engine_x` section at the end;
+`app.py`, `laws.txt`, `optimal_threads.json`, `sandbox_workspace/` = master's bytes
+(their only differences were line endings from the older tree).
+
+## Reproduce
+
+```bash
+python3 engine_x/test_engine_x.py          # 47 tests, OK, ~3.5 s
+python3 engine_x/bench_all.py --quick      # regenerates bench_baseline.json
+python3 engine_x/apply_to_engine.py        # dry-run diff against engine.py
+```
