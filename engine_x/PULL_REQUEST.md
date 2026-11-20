@@ -5,9 +5,10 @@ plus one honest verdict per idea. Nothing here is a claim that was not measured 
 box, and every measurement that came out smaller (or negative) than expected is reported
 at full strength.
 
-**Base:** `0ecffd9` (grafted stub checkout). **Tests:** `python3 engine_x/test_engine_x.py`
-→ **47 tests, OK**. **Numbers:** `python3 engine_x/bench_all.py --quick` →
-`engine_x/bench_baseline.json`.
+**Merge state:** `MERGEABLE / CLEAN` against `master` (`7e481b3`).
+**Diff:** 16 files, **+3,662 / −0** — 15 new files under `engine_x/` plus `.gitignore`.
+**Tests:** `python3 engine_x/test_engine_x.py` → **47 tests, OK**.
+**Numbers:** `python3 engine_x/bench_all.py --quick` → `engine_x/bench_baseline.json`.
 
 Box: Xeon @2.60 GHz, 2 cores, **3,939 MB RAM**, ~21 GB/s measured memory bandwidth,
 AVX2 + AVX512F, **no VNNI**, no GPU, 627 MB/s cold disk.
