@@ -20,3 +20,9 @@ ssd_kv_cache/
 # patcher backups
 *.bak
 engine_probe.py
+
+# generated state (rebuilt at runtime by database.py / rom_vault.py)
+*.db
+*.db-wal
+*.db-shm
+ssd_images/
