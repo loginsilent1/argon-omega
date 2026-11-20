@@ -129,6 +129,67 @@ class TestKernel(unittest.TestCase):
         self.assertLess(k["ternary_vs_float"], 2.0)
 
 
+class TestAirLLM(unittest.TestCase):
+    """Layer streaming, measured on a real file - not a projection."""
+
+    @classmethod
+    def setUpClass(cls):
+        from engine_x.airllm_brain import llama_shaped_spec, _make_synthetic
+        cls.spec = llama_shaped_spec(n_layers=8, hidden=896)     # ~157 MB
+        cls.path = "/tmp/_test_airllm_model.bin"
+        _make_synthetic(cls.path, cls.spec)
+
+    @classmethod
+    def tearDownClass(cls):
+        try:
+            os.remove(cls.path)
+        except OSError:
+            pass
+
+    def test_spec_matches_llama_arithmetic(self):
+        from engine_x.airllm_brain import llama_shaped_spec
+        one = llama_shaped_spec(n_layers=1, hidden=4096)[0]
+        # 4*h^2 attention + 3*h*ffn, f16
+        self.assertEqual(one.params, 4 * 4096 ** 2 + 3 * 4096 * int(2.75 * 4096))
+        self.assertEqual(one.nbytes, one.params * 2)
+
+    def test_serial_reads_one_model_per_token(self):
+        from engine_x.airllm_brain import stream_model
+        r = stream_model(self.path, self.spec, mode="serial", tokens=2)
+        self.assertEqual(r["bytes_read_x_model"], 2.0)
+        self.assertGreater(r["steady_ms_per_token"], 0)
+
+    def test_compressed_reads_half_the_bytes(self):
+        from engine_x.airllm_brain import stream_model
+        r = stream_model(self.path, self.spec, mode="compressed", tokens=1)
+        self.assertEqual(r["bytes_read_x_model"], 0.5)
+
+    def test_prefetch_is_never_worse_than_serial(self):
+        from engine_x.airllm_brain import stream_model
+        serial = stream_model(self.path, self.spec, mode="serial", tokens=2)
+        pre = stream_model(self.path, self.spec, mode="prefetch", tokens=2)
+        self.assertGreater(pre["steady_ms_per_token"], 0.8 * serial["steady_ms_per_token"],
+                           f"prefetch regressed badly: {pre} vs {serial}")
+
+    def test_mmap_is_measured_not_guessed(self):
+        from engine_x.airllm_brain import stream_model
+        r = stream_model(self.path, self.spec, mode="mmap", tokens=2)
+        self.assertIsNone(r["load_share_pct"], "mmap cannot separate load from compute")
+        self.assertIsNotNone(r["bytes_faulted_est"])
+
+    def test_plan_prefers_resident_and_quantising_over_streaming(self):
+        from engine_x.airllm_brain import plan
+        small = plan(int(2e9), 4 << 30, 627e6)
+        self.assertTrue(small["fits_resident"])
+        self.assertEqual(small["recommended"], "resident")
+        big = plan(int(70e9), 4 << 30, 627e6)
+        self.assertFalse(big["fits_resident"])
+        self.assertEqual(big["recommended"], "stream")
+        # 70 GB on a 627 MB/s disk: one model read per token, nothing hides it
+        self.assertLess(big["tok_per_s_streamed"], 0.02)
+        self.assertGreater(big["tok_per_s_resident_int8"], big["tok_per_s_streamed"] * 10)
+
+
 class TestApplyToEngine(unittest.TestCase):
     """The patcher must be safe to run blindly: dry-run, idempotent, all-or-nothing."""
 

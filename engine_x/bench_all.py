@@ -91,10 +91,20 @@ def bench_disk():
             dt = time.perf_counter() - t
         seq = (size / 1e6) / dt if dt else 0
         # token budget: read 1 GB of weights
+        # 96 MB fits in this box's page cache, so the number above is a WARM number.
+        # The cold number is what layer streaming actually pays: measure it on a file
+        # bigger than RAM (same function the AirLLM layer uses).
+        sys.path.insert(0, ROOT)
+        from engine_x.airllm_brain import measure_disk
+        cold = measure_disk(4 << 30, passes=3)
         rec("disk", read_mbs=round(seq, 1),
             gb_per_second=round(seq / 1000, 2),
-            ms_to_stream_1gb=round(1000 / seq * 1000, 1),
-            ms_per_token_if_13_4gb_model_evicted=round(13400 / seq * 1000, 1))
+            warm_note="96 MB probe file: served from page cache, not disk",
+            cold_gb_per_s=cold["median_gb_per_s"],
+            cold_mb_per_s=cold["median_mb_per_s"],
+            cold_range_mb_per_s=[cold["min_mb_per_s"], cold["max_mb_per_s"]],
+            warm_vs_cold_x=round(seq / max(1e-9, cold["median_mb_per_s"]), 1),
+            ms_per_token_if_13_4gb_model_evicted=round(13400 / cold["median_mb_per_s"] * 1000, 1))
     except Exception as e:
         rec("disk", error=str(e))
     finally:
@@ -285,6 +295,43 @@ def bench_triemind(quick=True):
     rec("layer1_triemind", held_out=os.path.basename(held_out), **d.stats(), **r)
 
 
+def bench_airllm(quick=True):
+    """The AirLLM idea: stream layers from disk. Measures what it costs per token."""
+    sys.path.insert(0, ROOT)
+    from engine_x.airllm_brain import (llama_shaped_spec, _make_synthetic, run_mode_isolated,
+                                       plan, COMPUTE_IS_PLACEHOLDER)
+    spec = llama_shaped_spec(n_layers=8, hidden=1024)      # ~205 MB, 8 blocks
+    path = "/tmp/_airllm_bench_model.bin"
+    try:
+        _make_synthetic(path, spec)
+        tokens = 4 if quick else 8
+        modes = {}
+        for mode in ("serial", "prefetch", "mmap", "compressed"):
+            modes[mode] = run_mode_isolated(path, spec, mode, tokens=tokens)
+    finally:
+        try:
+            os.remove(path)
+        except OSError:
+            pass
+    base = modes["serial"]["steady_ms_per_token"]
+    cold = RESULTS.get("disk", {}).get("cold_gb_per_s") or 0.555
+    projections = {
+        f"{g}gb_f16": plan(int(g * 1e9), 3939 << 20, cold * 1e9, n_layers=32)
+        for g in (7, 13, 70)
+    }
+    rec("layer1_airllm",
+        compute_is_placeholder=COMPUTE_IS_PLACEHOLDER,
+        model_mb=modes["serial"]["model_mb"], tokens=tokens,
+        per_mode={m: {"steady_ms_per_token": r["steady_ms_per_token"],
+                      "first_token_ms": r["first_token_ms"],
+                      "vs_serial": round(base / r["steady_ms_per_token"], 2),
+                      "rss_peak_mb": r["rss_peak_mb"],
+                      "bytes_read_x_model": r["bytes_read_x_model"],
+                      "load_share_pct": r["load_share_pct"]}
+                  for m, r in modes.items()},
+        projections=projections)
+
+
 def bench_prefix_bank():
     """Prefix bank stats + a warm lookup measurement (no model needed)."""
     sys.path.insert(0, ROOT)
@@ -321,7 +368,7 @@ def main():
     t0 = time.perf_counter()
     for fn in (bench_hardware, bench_disk, bench_cache, bench_drafting, bench_kv,
                lambda: bench_kernel(quick), bench_templates, lambda: bench_triemind(quick), bench_prefix_bank,
-               bench_engine_config):
+               bench_airllm, bench_engine_config):
         name = getattr(fn, "__name__", "kernel")
         try:
             fn()

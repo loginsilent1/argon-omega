@@ -189,3 +189,56 @@ You cannot multiply 4.9 × 1.86 × 28 and call it 255×. The templates cut outpu
 the drafter cuts passes, the kernel cuts time per pass — that composition is roughly
 `4.9 ×` output-length reduction with `~1.4–1.8×` fewer passes on top, i.e. **a 6–9×
 end-to-end improvement for template-matching tasks and ~1.8× for everything else.**
+
+---
+
+## AirLLM: stream the layers from disk instead of holding the model
+
+The idea is sound and it is now implemented (`airllm_brain.py`), because the only honest
+way to judge it is to measure the disk it depends on.
+
+**The physics.** If nothing is resident, every generated token requires reading every
+layer once: `tok/s = disk_bandwidth / model_size`. There is no overlap to be had beyond
+double buffering, and the 100th token costs exactly what the 1st costs.
+
+### Measured disk, cold (4 GB file, 3 passes, this box)
+
+| measurement | value |
+|---|---|
+| warm read (96 MB probe, page-cached) | **5,660 MB/s** |
+| cold read (4 GB, median of 3) | **627 MB/s** (range 552–629) |
+| **warm vs cold** | **9.0×** |
+| page cache | 3.9 GB RAM, file 4 GB — the cache can never hold the model |
+
+That 9× gap is why the earlier `disk: 5697.8 MB/s` entry in this file was misleading: it
+was measured on a 96 MB file, i.e. out of the page cache.
+
+### Layer streaming, measured (205 MB synthetic model, 8 blocks, f16-sized)
+
+| mode | ms/token (steady) | vs serial | bytes read | peak RSS |
+|---|---|---|---|---|
+| serial pread | 213 | 1.00× | 4.0× model | **34 MB (17%)** |
+| prefetch (double buffer) | 180 | **1.19×** | 4.0× model | 59 MB (29%) |
+| mmap | 163 | 1.31× | (page faults) | 203 MB (99%) |
+| compressed int8 on disk | 91 | **2.33×** | 2.0× model | **22 MB (11%)** |
+
+The RSS column is the real AirLLM payoff: **11–17% of the model in RAM instead of 100%**.
+`mmap` is faster only because it lets the OS keep what fits — on a 3.9 GB box with a 13 GB
+model it degrades to the same cold reads as serial.
+
+### What it means for a real model on this box
+
+| model (f16) | streamed | mmap | int8 resident (if it fits) |
+|---|---|---|---|
+| 7 GB | 0.099 tok/s | 0.090 | 2.7 tok/s (11 s/token: does not fit 3.9 GB) |
+| 13 GB | 0.053 tok/s | 0.048 | 1.45 tok/s |
+| 70 GB | **0.010 tok/s — 106 s/token** | 0.009 | 0.27 tok/s |
+
+**Verdict: AirLLM buys "it runs at all", not speed.** It turns a 70B model from impossible
+into ~1 token per 106 seconds on this disk. Where the choice exists, **quantise to int8 and
+keep it resident**: for the same bytes it is ~10–27× faster than streaming (RAM bandwidth
+is ~34× disk bandwidth here) and it needs no per-layer pipeline at all.
+
+The compute step in the harness is a memory-shaped placeholder, not a real matmul
+(`COMPUTE_IS_PLACEHOLDER = True` in every report), so all tok/s above are upper bounds.
+No real weights exist in this sandbox — huggingface.co is unreachable from here.
